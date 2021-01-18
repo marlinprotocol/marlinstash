@@ -9,3 +9,6 @@ make release
 
 echo -e "${COLOR}COPYING persistenctlogs to /usr/local/bin/ ${ENDCOLOR}"
 make install
+
+echo -e "${COLOR}COPYING configs to /etc/persistentlogs/config.yaml ${ENDCOLOR}"
+cp example_config.yaml /etc/persistentlogs/config.yaml
