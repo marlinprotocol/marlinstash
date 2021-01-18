@@ -9,6 +9,7 @@ import (
 func RunLogger(cmd *cobra.Command, args []string) error {
 	// Channel creation
 	// var todoChans []types.DBEntryLine
+	// log.Info(viper.Get("services"))
 
 	_ = DB.DBConnection{
 		Host:     viper.GetString("database_host"),
