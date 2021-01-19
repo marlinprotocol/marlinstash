@@ -6,8 +6,12 @@ database_dbname: "dbname"
 database_username: "username"
 database_password: "password"
 
+inode_info_directory: "/etc/marlinstash/inode"
+
 services:
-  - name: "hello"
-    user: "general"
-  - name: "hello"
-    user: "nongen"
+  - service: "bootstrap"
+    logrootdir: "/var/log/supervisor"
+    fileregex: "bootstrap[0-9]+.log"
+  - service: "relay"
+    logrootdir: "/var/log/supervisor"
+    fileregex: "relay*.log"

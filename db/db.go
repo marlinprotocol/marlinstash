@@ -5,17 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"marlinstash/types"
+
 	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
 )
-
-type EntryLine struct {
-	Service string
-	Host    string
-	Inode   string
-	Offset  string
-	Message string
-}
 
 type Config struct {
 	Host     string
@@ -28,11 +22,11 @@ type Config struct {
 type Worker struct {
 	config *Config
 
-	Entries chan *EntryLine
+	Entries chan *types.EntryLine
 }
 
 func CreateWorker(config *Config) *Worker {
-	return &Worker{config, make(chan *EntryLine, 100)}
+	return &Worker{config, make(chan *types.EntryLine, 100)}
 }
 
 func (w *Worker) Run() {
