@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"marlinstash/tail"
 	"marlinstash/types"
 	"os"
 	"path/filepath"
@@ -33,8 +34,54 @@ func getPersistedOffset(inode uint64) int64 {
 	return offset
 }
 
-func beginTail(filepath string, offset int64, restartSignal chan struct{}, log *lf.Entry) {
+func setPersistedOffset(inode uint64, writerChan chan int64) {
+	loc := viper.GetString("inode_info_directory") + "/" + strconv.FormatInt(int64(inode), 10)
+	c := 0
+	gap := viper.GetInt("offset_persistence_gap")
+	for offset := range writerChan {
+		if c < gap {
+			c = c + 1
+			continue
+		}
+		fd, err := os.Open(loc)
+		if err != nil {
+			lf.Error("Error while opening "+loc, err)
+		}
+		_, err = fd.WriteString(fmt.Sprintf("%d\n", offset))
+		if err != nil {
+			lf.Error("Error while writing to "+loc, err)
+		}
+		defer fd.Close()
+		c = 0
+	}
+}
+
+func beginTail(service string, filepath string, offset int64, datachan chan *types.EntryLine, restartSignal chan struct{}, inodestr string, writerChan chan int64, log *lf.Entry) {
 	log.Info("Tailer started for ", filepath, " persisted offset used: ", offset)
+	t, _ := tail.TailFile(filepath, tail.Config{
+		Location: &tail.SeekInfo{Offset: offset},
+		Follow:   true,
+	})
+	host := viper.GetString("host")
+	dbAdditionSignal := make(chan struct{})
+	for line := range t.Lines {
+		datachan <- &types.EntryLine{
+			Service:  service,
+			Host:     host,
+			Inode:    inodestr,
+			Offset:   offset + int64(line.Offset),
+			Message:  line.Text,
+			Callback: dbAdditionSignal,
+		}
+
+		select {
+		case <-dbAdditionSignal:
+		}
+
+		offset = offset + int64(line.Offset)
+
+		writerChan <- offset
+	}
 }
 
 func invokeTailer(service string, filepath string, datachan chan *types.EntryLine, log *lf.Entry) {
@@ -46,10 +93,12 @@ func invokeTailer(service string, filepath string, datachan chan *types.EntryLin
 		return
 	}
 	inode := stat.Ino
+	writerChan := make(chan int64, 100)
+	go setPersistedOffset(inode, writerChan)
 	for {
 		restartSignal := make(chan struct{})
 		offset := getPersistedOffset(inode)
-		go beginTail(filepath, offset, restartSignal, log)
+		go beginTail(service, filepath, offset, datachan, restartSignal, strconv.FormatInt(int64(inode), 10), writerChan, log)
 
 		select {
 		case <-restartSignal:

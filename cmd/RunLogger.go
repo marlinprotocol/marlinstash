@@ -33,6 +33,9 @@ func RunLogger(cmd *cobra.Command, args []string) error {
 		go service.Run(srv, dbWorker.Entries)
 	}
 
+	// ROSHAN - uncomment the following after implementing db.Run() to test full flow
+	// go db.Run()
+
 	infChan := make(chan struct{})
 	select {
 	case <-infChan:

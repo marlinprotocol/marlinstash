@@ -4,9 +4,9 @@ type EntryLine struct {
 	Service  string
 	Host     string
 	Inode    string
-	Offset   string
+	Offset   int64
 	Message  string
-	Callback chan EntryLine
+	Callback chan struct{}
 }
 
 type Service struct {
