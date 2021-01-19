@@ -6,3 +6,8 @@ database_dbname: "dbname"
 database_username: "username"
 database_password: "password"
 
+services:
+  - name: "hello"
+    user: "general"
+  - name: "hello"
+    user: "nongen"

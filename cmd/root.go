@@ -38,7 +38,10 @@ var RootCmd = &cobra.Command{
 	Short:   "Persistent Logs saves logs from a file to a postgres instance",
 	Long:    "Persistent Logs saves logs from a file to a postgres instance",
 	Version: version.RootCmdVersion,
-	RunE:    RunLogger,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return readConfig()
+	},
+	RunE: RunLogger,
 }
 
 func Execute() {
@@ -49,7 +52,7 @@ func Execute() {
 }
 
 func init() {
-	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.marlin/ctl/state.yaml)")
+	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /etc/persistentlogs/config.yaml)")
 }
 
 // initConfig reads in config file and ENV variables if set.
