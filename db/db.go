@@ -55,6 +55,7 @@ func (w *Worker) Run() {
 
 			continue
 		}
+		timerWait = time.Second
 		defer db.Close()
 
 		// TODO: Receive from channel and handle
