@@ -13,8 +13,8 @@ limitations under the License.
 package main
 
 import (
-	"github.com/marlinprotocol/PersistentLogs/cmd"
 	log "github.com/sirupsen/logrus"
+	"marlinstash/cmd"
 )
 
 func init() {

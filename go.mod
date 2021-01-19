@@ -1,4 +1,4 @@
-module github.com/marlinprotocol/PersistentLogs
+module marlinstash
 
 go 1.15
 

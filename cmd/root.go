@@ -21,7 +21,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/marlinprotocol/PersistentLogs/version"
+	"marlinstash/version"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

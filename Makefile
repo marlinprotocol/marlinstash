@@ -1,7 +1,7 @@
 GO=go
 GOBUILD=$(GO) build
 BINDIR=build
-BINCLI=persistentlogs
+BINCLI=marlinstash
 INSTALLLOC=/usr/local/bin/$(BINCLI)
 RELEASE=$(shell git describe --tags --abbrev=0)
 BUILDCOMMIT=$(shell git rev-parse HEAD)
@@ -11,9 +11,9 @@ PERSISTENTLOGSVERSION=$(PERSISTENTLOGSBUILDVERSIONSTRING)
 
 release:
 	$(GOBUILD) -ldflags="\
-	-X github.com/marlinprotocol/PersistentLogs/version.ApplicationVersion=$(PERSISTENTLOGSVERSION) \
-	-X github.com/marlinprotocol/PersistentLogs/version.buildCommit=$(BUILDLINE)@$(BUILDCOMMIT) \
-	-X github.com/marlinprotocol/PersistentLogs/version.buildTime=$(CURRENTTIME) \
+	-X marlinstash/version.ApplicationVersion=$(PERSISTENTLOGSVERSION) \
+	-X marlinstash/version.buildCommit=$(BUILDLINE)@$(BUILDCOMMIT) \
+	-X marlinstash/version.buildTime=$(CURRENTTIME) \
 	-linkmode=external" \
 	-o $(BINDIR)/$(BINCLI)
 clean:
