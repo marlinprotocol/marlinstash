@@ -14,7 +14,7 @@ type Worker struct {
 	hotEntry *types.EntryLine
 
 	Entries chan *types.EntryLine
-	OffsetReqs chan *types.InodeOffsetReq
+	InodeOffsetReqs chan *types.InodeOffsetReq
 	Done chan bool
 }
 
@@ -44,8 +44,8 @@ func (w *Worker) Run() {
 
 		// Listen for new entries
 		// TODO: Listen for offset reqs
-		for {
-			entry, ok := <-w.Entries
+		select {
+		case entry, ok := <-w.Entries:
 			if !ok {
 				log.Error("DB: Entries channel closed")
 				close(w.Done)
@@ -58,6 +58,28 @@ func (w *Worker) Run() {
 				goto eb
 			}
 			w.hotEntry = nil
+		case req, ok := <-w.InodeOffsetReqs:
+			if !ok {
+				log.Error("DB: Reqs channel closed")
+				close(w.Done)
+				goto end
+			}
+			inodeOffset := &types.InodeOffset{
+				Service: req.Service,
+				Host: req.Host,
+				Inode: req.Inode,
+				Offset: 0,
+			}
+			_, err := db.Model(inodeOffset).
+					Where("service = ?", req.Service).
+					Where("host = ?", req.Host).
+					Where("inode = ?", req.Inode).
+					SelectOrInsert()
+			if err != nil {
+				close(req.Resp)
+			} else {
+				req.Resp<- inodeOffset
+			}
 		}
 
 		continue // End of loop, only specific control blocks below
