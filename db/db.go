@@ -76,9 +76,10 @@ func (w *Worker) Run() {
 					SelectOrInsert()
 			if err != nil {
 				close(req.Resp)
-			} else {
-				req.Resp<- inodeOffset
+				log.Error("Offset query error: ", err)
+				goto eb
 			}
+			req.Resp<- inodeOffset
 		}
 
 		continue // End of loop, only specific control blocks below
