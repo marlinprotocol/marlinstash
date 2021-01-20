@@ -1,38 +1,30 @@
 package db
 
 import (
-	"database/sql"
-	"fmt"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/go-pg/pg/v10"
 	log "github.com/sirupsen/logrus"
 )
 
 type EntryLine struct {
-	Service string
-	Host    string
-	Inode   string
-	Offset  string
+	Service string `pg:",unique:dedup"`
+	Host    string `pg:",unique:dedup"`
+	Inode   int64  `pg:",unique:dedup"`
+	Offset  int64  `pg:",unique:dedup"`
 	Message string
 }
 
-type Config struct {
-	Host     string
-	Port     string
-	DBName   string
-	User     string
-	Password string
-}
-
 type Worker struct {
-	config *Config
+	config   *pg.Options
+	hotEntry *EntryLine
 
 	Entries chan *EntryLine
+	Done    chan *EntryLine
 }
 
-func CreateWorker(config *Config) *Worker {
-	return &Worker{config, make(chan *EntryLine, 100)}
+func CreateWorker(config *pg.Options) *Worker {
+	return &Worker{config, nil, make(chan *EntryLine, 100), make(chan *EntryLine, 100)}
 }
 
 func (w *Worker) Run() {
@@ -42,29 +34,54 @@ func (w *Worker) Run() {
 
 	for {
 		log.Info("Connecting to DB...")
-		db, err := w.connect()
-		if err != nil {
-			log.Error("Connection error: ", err)
-
-			// Exponential backoff
-			time.Sleep(timerWait)
-			timerWait *= 2
-			if timerWait > 300*time.Second { // Cap backoff at 300s
-				timerWait = 300 * time.Second
-			}
-
-			continue
-		}
-		timerWait = time.Second
+		db := pg.Connect(w.config)
 		defer db.Close()
 
-		// TODO: Receive from channel and handle
+		// Process any hot entries first
+		if w.hotEntry != nil {
+			err := w.processEntry(db, w.hotEntry)
+			if err != nil {
+				log.Error("Insert error: ", err)
+				goto eb
+			}
+			w.Done <- w.hotEntry
+			w.hotEntry = nil
+		}
+
+		// Listen for new entries
+		for {
+			entry, ok := <-w.Entries
+			if !ok {
+				log.Error("DB: Entries channel closed")
+				close(w.Done)
+				goto end
+			}
+			w.hotEntry = entry
+			err := w.processEntry(db, w.hotEntry)
+			if err != nil {
+				log.Error("Insert error: ", err)
+				goto eb
+			}
+			w.Done <- w.hotEntry
+			w.hotEntry = nil
+		}
+
+		// End of loop, only specific control blocks below
+	eb:
+		// Exponential backoff
+		time.Sleep(timerWait)
+		timerWait *= 2
+		if timerWait > 300*time.Second { // Cap backoff at 300s
+			timerWait = 300 * time.Second
+		}
+
+		continue
 	}
+	end:
 }
 
-func (w *Worker) connect() (*sql.DB, error) {
-	connstr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s", w.config.Host, w.config.Port, w.config.User, w.config.Password, w.config.DBName)
-
-	db, err := sql.Open("postgres", connstr)
-	return db, err
+func (w *Worker) processEntry(db *pg.DB, entry *EntryLine) error {
+	_, err := db.Model(entry).OnConflict("DO NOTHING").Insert()
+	return err
 }
+
