@@ -1,30 +1,24 @@
 package db
 
 import (
+	"marlinstash/types"
 	"time"
 
 	"github.com/go-pg/pg/v10"
 	log "github.com/sirupsen/logrus"
 )
 
-type EntryLine struct {
-	Service string `pg:",unique:dedup"`
-	Host    string `pg:",unique:dedup"`
-	Inode   int64  `pg:",unique:dedup"`
-	Offset  int64  `pg:",unique:dedup"`
-	Message string
-}
 
 type Worker struct {
 	config   *pg.Options
-	hotEntry *EntryLine
+	hotEntry *types.EntryLine
 
-	Entries chan *EntryLine
-	Done    chan *EntryLine
+	Entries chan *types.EntryLine
+	Done    chan *types.EntryLine
 }
 
-func CreateWorker(config *pg.Options) *Worker {
-	return &Worker{config, nil, make(chan *EntryLine, 100), make(chan *EntryLine, 100)}
+func CreateWorker(config *pg.Options, done chan *types.EntryLine) *Worker {
+	return &Worker{config, nil, make(chan *types.EntryLine, 100), done}
 }
 
 func (w *Worker) Run() {
@@ -80,7 +74,7 @@ func (w *Worker) Run() {
 	end:
 }
 
-func (w *Worker) processEntry(db *pg.DB, entry *EntryLine) error {
+func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
 	_, err := db.Model(entry).OnConflict("DO NOTHING").Insert()
 	return err
 }
