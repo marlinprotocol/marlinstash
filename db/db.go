@@ -43,6 +43,7 @@ func (w *Worker) Run() {
 		}
 
 		// Listen for new entries
+		// TODO: Listen for offset reqs
 		for {
 			entry, ok := <-w.Entries
 			if !ok {
