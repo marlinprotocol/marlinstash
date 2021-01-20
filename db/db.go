@@ -77,7 +77,13 @@ func (w *Worker) Run() {
 func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
 	_, err := db.Model(entry).OnConflict("DO NOTHING").Insert()
 
-	// TODO: Update offset
+	inodeOffset := &types.InodeOffset{
+		Service: entry.Service,
+		Host: entry.Host,
+		Inode: entry.Inode,
+		Offset: entry.Offset,
+	}
+	_, err = db.Model(inodeOffset).OnConflict("DO UPDATE offset = greatest(offset, EXCLUDED.offset)").Insert()
 
 	return err
 }
