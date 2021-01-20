@@ -1,11 +1,11 @@
 package types
 
 type EntryLine struct {
-	Service  string
-	Host     string
-	Inode    string
-	Offset   int64
-	Message  string
+	Service string `pg:",unique:dedup"`
+	Host    string `pg:",unique:dedup"`
+	Inode   uint64  `pg:",unique:dedup"`
+	Offset  uint64  `pg:",unique:dedup"`
+	Message string
 	Callback chan struct{}
 }
 
