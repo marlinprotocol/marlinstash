@@ -5,12 +5,7 @@ go 1.15
 require (
 	github.com/go-pg/migrations/v8 v8.0.1
 	github.com/go-pg/pg/v10 v10.7.3
-	github.com/go-sql-driver/mysql v1.5.0 // indirect
-	github.com/hpcloud/tail v1.0.0 // indirect
-	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/lib/pq v1.9.0 // indirect
-	github.com/marlinprotocol/ctl2 v0.0.0-20210112105306-ea84858f581a // indirect
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d
 	github.com/mitchellh/mapstructure v1.3.3 // indirect

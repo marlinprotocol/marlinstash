@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"marlinstash/tail/ratelimiter"
-	"marlinstashatch"
+	"marlinstash/tail/watch"
 )
 
 func init() {

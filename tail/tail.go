@@ -30,7 +30,7 @@ type Line struct {
 	Text   string
 	Time   time.Time
 	Err    error // Error from tail
-	Offset int
+	Offset uint64
 }
 
 // NewLine returns a Line with present time.
@@ -416,7 +416,7 @@ func (tail *Tail) sendLine(line string) bool {
 	}
 
 	for _, line := range lines {
-		tail.Lines <- &Line{line, now, nil, len(line)}
+		tail.Lines <- &Line{line, now, nil, uint64(len(line))}
 	}
 
 	if tail.Config.RateLimiter != nil {

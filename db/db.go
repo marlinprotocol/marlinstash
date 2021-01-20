@@ -14,11 +14,12 @@ type Worker struct {
 	hotEntry *types.EntryLine
 
 	Entries chan *types.EntryLine
-	Done    chan *types.EntryLine
+	OffsetReqs chan *types.InodeOffsetReq
+	Done chan bool
 }
 
-func CreateWorker(config *pg.Options, done chan *types.EntryLine) *Worker {
-	return &Worker{config, nil, make(chan *types.EntryLine, 100), done}
+func CreateWorker(config *pg.Options, done chan bool) *Worker {
+	return &Worker{config, nil, make(chan *types.EntryLine, 100), make(chan *types.InodeOffsetReq, 100), done}
 }
 
 func (w *Worker) Run() {
@@ -38,7 +39,6 @@ func (w *Worker) Run() {
 				log.Error("Insert error: ", err)
 				goto eb
 			}
-			w.Done <- w.hotEntry
 			w.hotEntry = nil
 		}
 
@@ -56,11 +56,10 @@ func (w *Worker) Run() {
 				log.Error("Insert error: ", err)
 				goto eb
 			}
-			w.Done <- w.hotEntry
 			w.hotEntry = nil
 		}
 
-		// End of loop, only specific control blocks below
+		continue // End of loop, only specific control blocks below
 	eb:
 		// Exponential backoff
 		time.Sleep(timerWait)
@@ -76,6 +75,9 @@ func (w *Worker) Run() {
 
 func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
 	_, err := db.Model(entry).OnConflict("DO NOTHING").Insert()
+
+	// TODO: Update offset
+
 	return err
 }
 
