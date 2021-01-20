@@ -268,10 +268,11 @@ func (tail *Tail) tailFileSync() {
 		}
 
 		line, err := tail.readLine()
+		noffset := offset + int64(len(line)) + 1
 
 		// Process `line` even if err is EOF.
 		if err == nil {
-			_ = !tail.sendLine(line)
+			_ = !tail.sendLine(line, uint64(noffset))
 			// if cooloff {
 			// 	// Wait a second before seeking till the end of
 			// 	// file when rate limit is reached.
@@ -291,7 +292,7 @@ func (tail *Tail) tailFileSync() {
 		} else if err == io.EOF {
 			if !tail.Follow {
 				if line != "" {
-					tail.sendLine(line)
+					tail.sendLine(line, uint64(noffset))
 				}
 				return
 			}
@@ -406,7 +407,7 @@ func (tail *Tail) seekTo(pos SeekInfo) error {
 
 // sendLine sends the line(s) to Lines channel, splitting longer lines
 // if necessary. Return false if rate limit is reached.
-func (tail *Tail) sendLine(line string) bool {
+func (tail *Tail) sendLine(line string, offset uint64) bool {
 	now := time.Now()
 	lines := []string{line}
 
@@ -416,7 +417,7 @@ func (tail *Tail) sendLine(line string) bool {
 	}
 
 	for _, line := range lines {
-		tail.Lines <- &Line{line, now, nil, uint64(len(line))}
+		tail.Lines <- &Line{line, now, nil, offset}
 	}
 
 	if tail.Config.RateLimiter != nil {

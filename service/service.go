@@ -68,13 +68,11 @@ func beginTail(service string, filepath string, offset uint64, datachan chan *ty
 			Service:  service,
 			Host:     host,
 			Inode:    inode,
-			Offset:   offset + line.Offset,  // ROSHAN: Is this right?
+			Offset:   line.Offset,
 			Message:  line.Text,
 		}
 
-		offset = offset + line.Offset
-
-		writerChan <- offset
+		writerChan <- line.Offset
 	}
 }
 
