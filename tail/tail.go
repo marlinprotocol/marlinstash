@@ -209,21 +209,21 @@ func (tail *Tail) reopen() error {
 	return nil
 }
 
-func (tail *Tail) readLine(offset uint64) (string, uint64, error) {
+func (tail *Tail) readLine() (string, uint64, error) {
 	tail.lk.Lock()
 	line, err := tail.reader.ReadString('\n')
-	noffset := offset + uint64(len(line))
+	llen := uint64(len(line))
 	tail.lk.Unlock()
 	if err != nil {
 		// Note ReadString "returns the data read before the error" in
 		// case of an error, including EOF, so we return it as is. The
 		// caller is expected to process it if err is EOF.
-		return line, noffset, err
+		return line, llen, err
 	}
 
 	line = strings.TrimRight(line, "\n")
 
-	return line, noffset, err
+	return line, llen, err
 }
 
 func (tail *Tail) tailFileSync() {
@@ -268,7 +268,8 @@ func (tail *Tail) tailFileSync() {
 			}
 		}
 
-		line, noffset, err := tail.readLine(uint64(offset))
+		line, llen, err := tail.readLine()
+		noffset := uint64(offset) + llen
 
 		// Process `line` even if err is EOF.
 		if err == nil {
