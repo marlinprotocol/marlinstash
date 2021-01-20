@@ -1,6 +1,6 @@
 GO=go
 GOBUILD=$(GO) build
-BINDIR=build
+BINDIR=bin
 BINCLI=marlinstash
 INSTALLLOC=/usr/local/bin/$(BINCLI)
 RELEASE=$(shell git describe --tags --abbrev=0)
@@ -24,3 +24,6 @@ install:
 
 uninstall:
 	rm $(INSTALLLOC)
+
+migrate:
+	$(GOBUILD) -o $(BINDIR)/migrate cmd/migrate/*.go

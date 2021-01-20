@@ -1,32 +1,24 @@
 package db
 
 import (
-	"database/sql"
-	"fmt"
+	"marlinstash/types"
 	"time"
 
-	"marlinstash/types"
-
-	_ "github.com/lib/pq"
+	"github.com/go-pg/pg/v10"
 	log "github.com/sirupsen/logrus"
 )
 
-type Config struct {
-	Host     string
-	Port     string
-	DBName   string
-	User     string
-	Password string
-}
-
 type Worker struct {
-	config *Config
+	config   *pg.Options
+	hotEntry *types.EntryLine
 
-	Entries chan *types.EntryLine
+	Entries         chan *types.EntryLine
+	InodeOffsetReqs chan *types.InodeOffsetReq
+	Done            chan bool
 }
 
-func CreateWorker(config *Config) *Worker {
-	return &Worker{config, make(chan *types.EntryLine, 100)}
+func CreateWorker(config *pg.Options, done chan bool) *Worker {
+	return &Worker{config, nil, make(chan *types.EntryLine, 100), make(chan *types.InodeOffsetReq, 100), done}
 }
 
 func (w *Worker) Run() {
@@ -36,29 +28,83 @@ func (w *Worker) Run() {
 
 	for {
 		log.Info("Connecting to DB...")
-		db, err := w.connect()
-		if err != nil {
-			log.Error("Connection error: ", err)
-
-			// Exponential backoff
-			time.Sleep(timerWait)
-			timerWait *= 2
-			if timerWait > 300*time.Second { // Cap backoff at 300s
-				timerWait = 300 * time.Second
-			}
-
-			continue
-		}
-		timerWait = time.Second
+		db := pg.Connect(w.config)
 		defer db.Close()
 
-		// TODO: Receive from channel and handle
+		// Process any hot entries first
+		if w.hotEntry != nil {
+			err := w.processEntry(db, w.hotEntry)
+			if err != nil {
+				log.Error("Insert error: ", err)
+				goto eb
+			}
+			w.hotEntry = nil
+		}
+
+		// Listen for new entries
+		select {
+		case entry, ok := <-w.Entries:
+			if !ok {
+				log.Error("DB: Entries channel closed")
+				close(w.Done)
+				goto end
+			}
+			w.hotEntry = entry
+			err := w.processEntry(db, w.hotEntry)
+			if err != nil {
+				log.Error("Insert error: ", err)
+				goto eb
+			}
+			w.hotEntry = nil
+		case req, ok := <-w.InodeOffsetReqs:
+			if !ok {
+				log.Error("DB: Reqs channel closed")
+				close(w.Done)
+				goto end
+			}
+			inodeOffset := &types.InodeOffset{
+				Service: req.Service,
+				Host:    req.Host,
+				Inode:   req.Inode,
+				Offset:  0,
+			}
+			_, err := db.Model(inodeOffset).
+				Where("service = ?", req.Service).
+				Where("host = ?", req.Host).
+				Where("inode = ?", req.Inode).
+				SelectOrInsert()
+			if err != nil {
+				close(req.Resp)
+				log.Error("Offset query error: ", err)
+				goto eb
+			}
+			req.Resp <- inodeOffset
+		}
+
+		continue // End of loop, only specific control blocks below
+	eb:
+		// Exponential backoff
+		time.Sleep(timerWait)
+		timerWait *= 2
+		if timerWait > 300*time.Second { // Cap backoff at 300s
+			timerWait = 300 * time.Second
+		}
+
+		continue
 	}
+end:
 }
 
-func (w *Worker) connect() (*sql.DB, error) {
-	connstr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s", w.config.Host, w.config.Port, w.config.User, w.config.Password, w.config.DBName)
+func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
+	_, err := db.Model(entry).OnConflict("DO NOTHING").Insert()
 
-	db, err := sql.Open("postgres", connstr)
-	return db, err
+	inodeOffset := &types.InodeOffset{
+		Service: entry.Service,
+		Host:    entry.Host,
+		Inode:   entry.Inode,
+		Offset:  entry.Offset,
+	}
+	_, err = db.Model(inodeOffset).OnConflict("DO UPDATE offset = greatest(offset, EXCLUDED.offset)").Insert()
+
+	return err
 }

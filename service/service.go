@@ -17,8 +17,8 @@ import (
 
 const REFRESH time.Duration = 30
 
-func getPersistedOffset(inode uint64) int64 {
-	var offset int64
+func getPersistedOffset(inode uint64) uint64 {
+	var offset uint64
 	loc := viper.GetString("inode_info_directory") + "/" + strconv.FormatInt(int64(inode), 10)
 	if _, err := os.Stat(loc); !os.IsNotExist(err) {
 		fd, err := os.Open(loc)
@@ -34,7 +34,7 @@ func getPersistedOffset(inode uint64) int64 {
 	return offset
 }
 
-func setPersistedOffset(inode uint64, writerChan chan int64) {
+func setPersistedOffset(inode uint64, writerChan chan uint64) {
 	loc := viper.GetString("inode_info_directory") + "/" + strconv.FormatInt(int64(inode), 10)
 	c := 0
 	gap := viper.GetInt("offset_persistence_gap")
@@ -56,31 +56,23 @@ func setPersistedOffset(inode uint64, writerChan chan int64) {
 	}
 }
 
-func beginTail(service string, filepath string, offset int64, datachan chan *types.EntryLine, restartSignal chan struct{}, inodestr string, writerChan chan int64, log *lf.Entry) {
+func beginTail(service string, filepath string, offset uint64, datachan chan *types.EntryLine, restartSignal chan struct{}, inode uint64, writerChan chan uint64, log *lf.Entry) {
 	log.Info("Tailer started for ", filepath, " persisted offset used: ", offset)
 	t, _ := tail.TailFile(filepath, tail.Config{
-		Location: &tail.SeekInfo{Offset: offset},
+		Location: &tail.SeekInfo{Offset: int64(offset)},
 		Follow:   true,
 	})
 	host := viper.GetString("host")
-	dbAdditionSignal := make(chan struct{})
 	for line := range t.Lines {
 		datachan <- &types.EntryLine{
-			Service:  service,
-			Host:     host,
-			Inode:    inodestr,
-			Offset:   offset + int64(line.Offset),
-			Message:  line.Text,
-			Callback: dbAdditionSignal,
+			Service: service,
+			Host:    host,
+			Inode:   inode,
+			Offset:  line.Offset,
+			Message: line.Text,
 		}
 
-		select {
-		case <-dbAdditionSignal:
-		}
-
-		offset = offset + int64(line.Offset)
-
-		writerChan <- offset
+		writerChan <- line.Offset
 	}
 }
 
@@ -93,12 +85,12 @@ func invokeTailer(service string, filepath string, datachan chan *types.EntryLin
 		return
 	}
 	inode := stat.Ino
-	writerChan := make(chan int64, 100)
+	writerChan := make(chan uint64, 100)
 	go setPersistedOffset(inode, writerChan)
 	for {
 		restartSignal := make(chan struct{})
 		offset := getPersistedOffset(inode)
-		go beginTail(service, filepath, offset, datachan, restartSignal, strconv.FormatInt(int64(inode), 10), writerChan, log)
+		go beginTail(service, filepath, offset, datachan, restartSignal, inode, writerChan, log)
 
 		select {
 		case <-restartSignal:
