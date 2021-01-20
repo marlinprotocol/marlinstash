@@ -6,17 +6,17 @@ import (
 	"marlinstash/types"
 	"os"
 
+	"github.com/go-pg/pg/v10"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/go-pg/pg/v10"
 )
 
 func RunLogger(cmd *cobra.Command, args []string) error {
 	done := make(chan bool)
 	dbWorker := db.CreateWorker(&pg.Options{
-		Addr:     viper.GetString("database_host")+":"+viper.GetString("database_port"),
-		Database:   viper.GetString("database_dbname"),
+		Addr:     viper.GetString("database_host") + ":" + viper.GetString("database_port"),
+		Database: viper.GetString("database_dbname"),
 		User:     viper.GetString("database_username"),
 		Password: viper.GetString("database_password"),
 	}, done)

@@ -65,11 +65,11 @@ func beginTail(service string, filepath string, offset uint64, datachan chan *ty
 	host := viper.GetString("host")
 	for line := range t.Lines {
 		datachan <- &types.EntryLine{
-			Service:  service,
-			Host:     host,
-			Inode:    inode,
-			Offset:   line.Offset,
-			Message:  line.Text,
+			Service: service,
+			Host:    host,
+			Inode:   inode,
+			Offset:  line.Offset,
+			Message: line.Text,
 		}
 
 		writerChan <- line.Offset

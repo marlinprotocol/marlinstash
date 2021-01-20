@@ -8,14 +8,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-
 type Worker struct {
 	config   *pg.Options
 	hotEntry *types.EntryLine
 
-	Entries chan *types.EntryLine
+	Entries         chan *types.EntryLine
 	InodeOffsetReqs chan *types.InodeOffsetReq
-	Done chan bool
+	Done            chan bool
 }
 
 func CreateWorker(config *pg.Options, done chan bool) *Worker {
@@ -65,21 +64,21 @@ func (w *Worker) Run() {
 			}
 			inodeOffset := &types.InodeOffset{
 				Service: req.Service,
-				Host: req.Host,
-				Inode: req.Inode,
-				Offset: 0,
+				Host:    req.Host,
+				Inode:   req.Inode,
+				Offset:  0,
 			}
 			_, err := db.Model(inodeOffset).
-					Where("service = ?", req.Service).
-					Where("host = ?", req.Host).
-					Where("inode = ?", req.Inode).
-					SelectOrInsert()
+				Where("service = ?", req.Service).
+				Where("host = ?", req.Host).
+				Where("inode = ?", req.Inode).
+				SelectOrInsert()
 			if err != nil {
 				close(req.Resp)
 				log.Error("Offset query error: ", err)
 				goto eb
 			}
-			req.Resp<- inodeOffset
+			req.Resp <- inodeOffset
 		}
 
 		continue // End of loop, only specific control blocks below
@@ -93,7 +92,7 @@ func (w *Worker) Run() {
 
 		continue
 	}
-	end:
+end:
 }
 
 func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
@@ -101,12 +100,11 @@ func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
 
 	inodeOffset := &types.InodeOffset{
 		Service: entry.Service,
-		Host: entry.Host,
-		Inode: entry.Inode,
-		Offset: entry.Offset,
+		Host:    entry.Host,
+		Inode:   entry.Inode,
+		Offset:  entry.Offset,
 	}
 	_, err = db.Model(inodeOffset).OnConflict("DO UPDATE offset = greatest(offset, EXCLUDED.offset)").Insert()
 
 	return err
 }
-
