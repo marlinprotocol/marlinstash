@@ -52,7 +52,7 @@ func Execute() {
 }
 
 func init() {
-	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /etc/marlinstash/config.yaml)")
+	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /etc/marlinstash/config.yml)")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -60,7 +60,7 @@ func readConfig() error {
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 	} else {
-		viper.SetConfigFile("/etc/marlinstash/config.yaml")
+		viper.SetConfigFile("/etc/marlinstash/config.yml")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
