@@ -51,7 +51,9 @@ func invokeTailer(service string, filepath string, datachan chan *types.EntryLin
 			Inode:   inode,
 			Resp:    respChan,
 		}
+		log.Info("Waiting for respChan ", inode)
 		offsetResponse := <-respChan
+		log.Info("Respchan responded with offset", offsetResponse, " for inode ", inode)
 		go beginTail(service, host, filepath, offsetResponse.Offset, datachan, restartSignal, inode, log)
 
 		select {
