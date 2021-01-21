@@ -20,6 +20,7 @@ func RunLogger(cmd *cobra.Command, args []string) error {
 		User:     viper.GetString("database_username"),
 		Password: viper.GetString("database_password"),
 	}, done)
+	go dbWorker.Run()
 
 	// TODO: Use done, closed when db routine is ending
 	// Shouldn't happen in normal operation, but handle nevertheless
