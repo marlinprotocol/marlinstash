@@ -1,13 +1,11 @@
 package service
 
 import (
-	"fmt"
 	"marlinstash/tail"
 	"marlinstash/types"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -17,52 +15,12 @@ import (
 
 const REFRESH time.Duration = 30
 
-func getPersistedOffset(inode uint64) uint64 {
-	var offset uint64
-	loc := viper.GetString("inode_info_directory") + "/" + strconv.FormatInt(int64(inode), 10)
-	if _, err := os.Stat(loc); !os.IsNotExist(err) {
-		fd, err := os.Open(loc)
-		if err != nil {
-			lf.Error("Error while reading "+loc, err)
-		}
-		defer fd.Close()
-		_, err = fmt.Fscanf(fd, "%d\n", &offset)
-		if err != nil {
-			lf.Error("Error while reading "+loc, err)
-		}
-	}
-	return offset
-}
-
-func setPersistedOffset(inode uint64, writerChan chan uint64) {
-	loc := viper.GetString("inode_info_directory") + "/" + strconv.FormatInt(int64(inode), 10)
-	c := 0
-	gap := viper.GetInt("offset_persistence_gap")
-	for offset := range writerChan {
-		if c < gap {
-			c = c + 1
-			continue
-		}
-		fd, err := os.Open(loc)
-		if err != nil {
-			lf.Error("Error while opening "+loc, err)
-		}
-		_, err = fd.WriteString(fmt.Sprintf("%d\n", offset))
-		if err != nil {
-			lf.Error("Error while writing to "+loc, err)
-		}
-		defer fd.Close()
-		c = 0
-	}
-}
-
-func beginTail(service string, filepath string, offset uint64, datachan chan *types.EntryLine, restartSignal chan struct{}, inode uint64, writerChan chan uint64, log *lf.Entry) {
+func beginTail(service string, host string, filepath string, offset uint64, datachan chan *types.EntryLine, restartSignal chan struct{}, inode uint64, log *lf.Entry) {
 	log.Info("Tailer started for ", filepath, " persisted offset used: ", offset)
 	t, _ := tail.TailFile(filepath, tail.Config{
 		Location: &tail.SeekInfo{Offset: int64(offset)},
 		Follow:   true,
 	})
-	host := viper.GetString("host")
 	for line := range t.Lines {
 		datachan <- &types.EntryLine{
 			Service: service,
@@ -71,12 +29,10 @@ func beginTail(service string, filepath string, offset uint64, datachan chan *ty
 			Offset:  line.Offset,
 			Message: line.Text,
 		}
-
-		writerChan <- line.Offset
 	}
 }
 
-func invokeTailer(service string, filepath string, datachan chan *types.EntryLine, log *lf.Entry) {
+func invokeTailer(service string, filepath string, datachan chan *types.EntryLine, inodeOffsetReqChan chan *types.InodeOffsetReq, log *lf.Entry) {
 	log = log.WithField("file", filepath)
 	fileinfo, _ := os.Stat(filepath)
 	stat, ok := fileinfo.Sys().(*syscall.Stat_t)
@@ -85,12 +41,18 @@ func invokeTailer(service string, filepath string, datachan chan *types.EntryLin
 		return
 	}
 	inode := stat.Ino
-	writerChan := make(chan uint64, 100)
-	go setPersistedOffset(inode, writerChan)
 	for {
-		restartSignal := make(chan struct{})
-		offset := getPersistedOffset(inode)
-		go beginTail(service, filepath, offset, datachan, restartSignal, inode, writerChan, log)
+		restartSignal := make(chan struct{}) // TODO: not used right now
+		respChan := make(chan *types.InodeOffset)
+		host := viper.GetString("host")
+		inodeOffsetReqChan <- &types.InodeOffsetReq{
+			Service: service,
+			Host:    host,
+			Inode:   inode,
+			Resp:    respChan,
+		}
+		offsetResponse := <-respChan
+		go beginTail(service, host, filepath, offsetResponse.Offset, datachan, restartSignal, inode, log)
 
 		select {
 		case <-restartSignal:
@@ -99,7 +61,7 @@ func invokeTailer(service string, filepath string, datachan chan *types.EntryLin
 	}
 }
 
-func Run(t types.Service, datachan chan *types.EntryLine) {
+func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan chan *types.InodeOffsetReq) {
 	log := lf.WithField("Service", t.Service)
 	log.Info("Service start for "+t.Service+" with regex: ", t.FileRegex)
 
@@ -112,7 +74,7 @@ func Run(t types.Service, datachan chan *types.EntryLine) {
 				r, err := regexp.MatchString(t.FileRegex, f.Name())
 				if err == nil && r {
 					if _, ok := invokedRoutines[f.Name()]; !ok {
-						go invokeTailer(t.Service, t.LogRootDir+"/"+f.Name(), datachan, log)
+						go invokeTailer(t.Service, t.LogRootDir+"/"+f.Name(), datachan, inodeOffsetReqChan, log)
 						invokedRoutines[f.Name()] = true
 					}
 				}

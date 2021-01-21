@@ -34,9 +34,9 @@ var logLevel string
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
-	Use:     "persistentlogs",
-	Short:   "Persistent Logs saves logs from a file to a postgres instance",
-	Long:    "Persistent Logs saves logs from a file to a postgres instance",
+	Use:     "marlinstash",
+	Short:   "Marlin Stash saves logs from a file to a postgres instance",
+	Long:    "Marlin Stash saves logs from a file to a postgres instance",
 	Version: version.RootCmdVersion,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return readConfig()
@@ -52,7 +52,7 @@ func Execute() {
 }
 
 func init() {
-	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /etc/persistentlogs/config.yaml)")
+	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /etc/marlinstash/config.yaml)")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -60,7 +60,7 @@ func readConfig() error {
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 	} else {
-		viper.SetConfigFile("/etc/persistentlogs/config.yaml")
+		viper.SetConfigFile("/etc/marlinstash/config.yaml")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match

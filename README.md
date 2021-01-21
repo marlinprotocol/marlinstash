@@ -1,4 +1,4 @@
-# PersistentLogs
+# Marlin Stash
 Persist logs directly to a postgres instance
 
 ## Build and install
@@ -11,11 +11,11 @@ sh mk.sh 0.0.1
 ## Run
 Run using
 ```
-persistentlogs
+marlinstash
 ```
 
 ## Version
 Check version using
 ```
-persistentlogs -v
+marlinstash -v
 ```

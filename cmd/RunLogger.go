@@ -33,11 +33,8 @@ func RunLogger(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, srv := range services {
-		go service.Run(srv, dbWorker.Entries)
+		go service.Run(srv, dbWorker.Entries, dbWorker.InodeOffsetReqs)
 	}
-
-	// ROSHAN - uncomment the following after implementing db.Run() to test full flow
-	// go db.Run()
 
 	infChan := make(chan struct{})
 	select {
