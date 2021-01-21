@@ -63,7 +63,7 @@ func invokeTailer(service string, filepath string, datachan chan *types.EntryLin
 
 func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan chan *types.InodeOffsetReq) {
 	log := lf.WithField("Service", t.Service)
-	log.Info("Service start for "+t.Service+" with regex: ", t.FileRegex)
+	log.Info("Service start for "+t.Service+" with regex: ", t.FileRegex, ". filewalk refresh rate: ", REFRESH*time.Second)
 
 	invokedRoutines := make(map[string]bool)
 

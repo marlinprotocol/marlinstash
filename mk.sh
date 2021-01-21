@@ -10,7 +10,7 @@ make release
 echo -e "${COLOR}BUILDING marlinstash_migrate extra ${ENDCOLOR}"
 make migrate
 
-echo -e "${COLOR}COPYING marlinstash & migrate to /usr/local/bin/ ${ENDCOLOR}"
+echo -e "${COLOR}COPYING marlinstash & marlinstash_migrate to /usr/local/bin/ ${ENDCOLOR}"
 make install
 
 echo -e "${COLOR}COPYING configs to /etc/marlinstash/config.yaml ${ENDCOLOR}"

@@ -13,8 +13,9 @@ limitations under the License.
 package main
 
 import (
-	log "github.com/sirupsen/logrus"
 	"marlinstash/cmd"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -23,7 +24,8 @@ func init() {
 		ForceColors:      false,
 		DisableColors:    false,
 		TimestampFormat:  "2006-01-02 15:04:05",
-		DisableTimestamp: true,
+		DisableTimestamp: false,
+		FullTimestamp:    true,
 	})
 }
 
