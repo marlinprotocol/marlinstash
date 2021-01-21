@@ -6,8 +6,7 @@ database_dbname: "dbname"
 database_username: "username"
 database_password: "password"
 
-inode_info_directory: "/etc/marlinstash/inode"
-offset_persistence_gap: 10
+host: "tailerpc"
 
 services:
   - service: "bootstrap"
