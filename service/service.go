@@ -16,7 +16,7 @@ import (
 const REFRESH time.Duration = 30
 
 func beginTail(service string, host string, filepath string, offset uint64, datachan chan *types.EntryLine, restartSignal chan struct{}, inode uint64, log *lf.Entry) {
-	log.Info("Tailer started for ", filepath, " persisted offset used: ", offset)
+	log.WithField("offset", offset).Info("Tailer started")
 	t, _ := tail.TailFile(filepath, tail.Config{
 		Location: &tail.SeekInfo{Offset: int64(offset)},
 		Follow:   true,
@@ -51,9 +51,9 @@ func invokeTailer(service string, filepath string, datachan chan *types.EntryLin
 			Inode:   inode,
 			Resp:    respChan,
 		}
-		log.Info("Waiting for respChan ", inode)
+		log.Debug("Waiting for respChan ", inode)
 		offsetResponse := <-respChan
-		log.Info("Respchan responded with offset", offsetResponse, " for inode ", inode)
+		log.Debug("Respchan responded with offset", offsetResponse, " for inode ", inode)
 		go beginTail(service, host, filepath, offsetResponse.Offset, datachan, restartSignal, inode, log)
 
 		select {
@@ -64,13 +64,13 @@ func invokeTailer(service string, filepath string, datachan chan *types.EntryLin
 }
 
 func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan chan *types.InodeOffsetReq) {
-	log := lf.WithField("Service", t.Service)
-	log.Info("Service start for "+t.Service+" with regex: ", t.FileRegex, ". filewalk refresh rate: ", REFRESH*time.Second)
+	log := lf.WithField("service", t.Service)
+	log.WithField("regex", t.FileRegex).WithField("refresh", REFRESH*time.Second).Info("Service started")
 
 	invokedRoutines := make(map[string]bool)
 
 	for {
-		log.Info("Checking for new files to tail if any")
+		log.Info("Checking for new files to tail")
 		_ = filepath.Walk(t.LogRootDir, func(path string, f os.FileInfo, _ error) error {
 			if !f.IsDir() {
 				r, err := regexp.MatchString(t.FileRegex, f.Name())

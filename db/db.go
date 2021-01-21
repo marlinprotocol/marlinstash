@@ -3,7 +3,6 @@ package db
 import (
 	"marlinstash/types"
 	"time"
-	"fmt"
 	"context"
 
 	"github.com/go-pg/pg/v10"
@@ -18,7 +17,7 @@ func (d dbLogger) BeforeQuery(c context.Context, q *pg.QueryEvent) (context.Cont
 
 func (d dbLogger) AfterQuery(c context.Context, q *pg.QueryEvent) error {
 	res, _ := q.FormattedQuery()
-	fmt.Println(string(res))
+	log.Debug(string(res))
 	return nil
 }
 
