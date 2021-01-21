@@ -3,10 +3,24 @@ package db
 import (
 	"marlinstash/types"
 	"time"
+	"fmt"
+	"context"
 
 	"github.com/go-pg/pg/v10"
 	log "github.com/sirupsen/logrus"
 )
+
+type dbLogger struct { }
+
+func (d dbLogger) BeforeQuery(c context.Context, q *pg.QueryEvent) (context.Context, error) {
+	return c, nil
+}
+
+func (d dbLogger) AfterQuery(c context.Context, q *pg.QueryEvent) error {
+	res, _ := q.FormattedQuery()
+	fmt.Println(string(res))
+	return nil
+}
 
 type Worker struct {
 	config   *pg.Options
@@ -29,6 +43,7 @@ func (w *Worker) Run() {
 	for {
 		log.Info("Connecting to DB...")
 		db := pg.Connect(w.config)
+		db.AddQueryHook(dbLogger{})
 		defer db.Close()
 
 		// Process any hot entries first
@@ -41,44 +56,47 @@ func (w *Worker) Run() {
 			w.hotEntry = nil
 		}
 
+
 		// Listen for new entries
-		select {
-		case entry, ok := <-w.Entries:
-			if !ok {
-				log.Error("DB: Entries channel closed")
-				close(w.Done)
-				goto end
+		for {
+			select {
+			case entry, ok := <-w.Entries:
+				if !ok {
+					log.Error("DB: Entries channel closed")
+					close(w.Done)
+					goto end
+				}
+				w.hotEntry = entry
+				err := w.processEntry(db, w.hotEntry)
+				if err != nil {
+					log.Error("Insert error: ", err)
+					goto eb
+				}
+				w.hotEntry = nil
+			case req, ok := <-w.InodeOffsetReqs:
+				if !ok {
+					log.Error("DB: Reqs channel closed")
+					close(w.Done)
+					goto end
+				}
+				inodeOffset := &types.InodeOffset{
+					Service: req.Service,
+					Host:    req.Host,
+					Inode:   req.Inode,
+					Offset:  0,
+				}
+				_, err := db.Model(inodeOffset).
+					Where("service = ?", req.Service).
+					Where("host = ?", req.Host).
+					Where("inode = ?", req.Inode).
+					SelectOrInsert()
+				if err != nil {
+					close(req.Resp)
+					log.Error("Offset query error: ", err)
+					goto eb
+				}
+				req.Resp <- inodeOffset
 			}
-			w.hotEntry = entry
-			err := w.processEntry(db, w.hotEntry)
-			if err != nil {
-				log.Error("Insert error: ", err)
-				goto eb
-			}
-			w.hotEntry = nil
-		case req, ok := <-w.InodeOffsetReqs:
-			if !ok {
-				log.Error("DB: Reqs channel closed")
-				close(w.Done)
-				goto end
-			}
-			inodeOffset := &types.InodeOffset{
-				Service: req.Service,
-				Host:    req.Host,
-				Inode:   req.Inode,
-				Offset:  0,
-			}
-			_, err := db.Model(inodeOffset).
-				Where("service = ?", req.Service).
-				Where("host = ?", req.Host).
-				Where("inode = ?", req.Inode).
-				SelectOrInsert()
-			if err != nil {
-				close(req.Resp)
-				log.Error("Offset query error: ", err)
-				goto eb
-			}
-			req.Resp <- inodeOffset
 		}
 
 		continue // End of loop, only specific control blocks below
@@ -104,7 +122,7 @@ func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
 		Inode:   entry.Inode,
 		Offset:  entry.Offset,
 	}
-	_, err = db.Model(inodeOffset).OnConflict("DO UPDATE offset = greatest(offset, EXCLUDED.offset)").Insert()
+	_, err = db.Model(inodeOffset).OnConflict("(service, host, inode) DO UPDATE SET \"offset\" = greatest(inode_offset.offset, EXCLUDED.offset)").Insert()
 
 	return err
 }
