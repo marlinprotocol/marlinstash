@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/go-pg/pg/v10"
+	log "github.com/sirupsen/logrus"
 )
 
 type Pipeline struct {
@@ -25,9 +25,9 @@ func NewPipeline() *Pipeline {
 }
 
 type MsgRecv struct {
-	Host    string
-	Inode   uint64
-	Offset  uint64
+	Host      string
+	Inode     uint64
+	Offset    uint64
 	Ts        time.Time
 	Level     string
 	Location  string

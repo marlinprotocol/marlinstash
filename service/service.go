@@ -111,7 +111,7 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan cha
 			return nil
 		})
 
-		WAIT:
+	WAIT:
 		for {
 			select {
 			case inodeTailerKilled := <-killSignal:

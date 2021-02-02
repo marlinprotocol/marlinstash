@@ -25,8 +25,8 @@ func (d dbLogger) AfterQuery(c context.Context, q *pg.QueryEvent) error {
 }
 
 type Worker struct {
-	config   *pg.Options
-	hotEntry *types.EntryLine
+	config    *pg.Options
+	hotEntry  *types.EntryLine
 	pipelines map[string]pipelines.Pipeline
 
 	Entries         chan *types.EntryLine

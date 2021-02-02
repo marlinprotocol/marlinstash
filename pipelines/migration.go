@@ -2,7 +2,6 @@ package pipelines
 
 import "github.com/go-pg/pg/v10"
 
-
 type Migration struct {
 	Forward, Backward func(db *pg.Tx) error
 }
@@ -58,4 +57,3 @@ func ApplyMigrations(db *pg.DB, component string, migrations []*Migration, targe
 
 	return nil
 }
-
