@@ -24,6 +24,7 @@ func beginTail(service string, host string, filepath string, offset uint64, data
 	})
 	for line := range t.Lines {
 		if line.Err != nil {
+			log.Info("Tailer stopped")
 			killSignal <- inode
 			return
 		}
@@ -110,11 +111,15 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan cha
 			return nil
 		})
 
-		select {
-		case inodeTailerKilled := <-killSignal:
-			invokedRoutines[inodeTailerKilled] = false
-		case <-time.After(REFRESH * time.Second):
-			// REDO FILEWALK HERE
+		WAIT:
+		for {
+			select {
+			case inodeTailerKilled := <-killSignal:
+				invokedRoutines[inodeTailerKilled] = false
+			case <-time.After(REFRESH * time.Second):
+				// REDO FILEWALK HERE
+				break WAIT
+			}
 		}
 	}
 }
