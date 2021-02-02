@@ -1,5 +1,6 @@
 package types
 
+
 type EntryLine struct {
 	Service string `pg:",unique:dedup"`
 	Host    string `pg:",unique:dedup"`
@@ -27,3 +28,4 @@ type Service struct {
 	LogRootDir string
 	FileRegex  string
 }
+

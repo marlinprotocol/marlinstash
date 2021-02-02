@@ -1,15 +1,18 @@
 package db
 
 import (
+	"context"
+	"marlinstash/pipelines"
+	"marlinstash/pipelines/probe"
 	"marlinstash/types"
 	"time"
-	"context"
 
 	"github.com/go-pg/pg/v10"
+	"github.com/go-pg/pg/v10/orm"
 	log "github.com/sirupsen/logrus"
 )
 
-type dbLogger struct { }
+type dbLogger struct{}
 
 func (d dbLogger) BeforeQuery(c context.Context, q *pg.QueryEvent) (context.Context, error) {
 	return c, nil
@@ -24,6 +27,7 @@ func (d dbLogger) AfterQuery(c context.Context, q *pg.QueryEvent) error {
 type Worker struct {
 	config   *pg.Options
 	hotEntry *types.EntryLine
+	pipelines map[string]pipelines.Pipeline
 
 	Entries         chan *types.EntryLine
 	InodeOffsetReqs chan *types.InodeOffsetReq
@@ -31,7 +35,7 @@ type Worker struct {
 }
 
 func CreateWorker(config *pg.Options, done chan bool) *Worker {
-	return &Worker{config, nil, make(chan *types.EntryLine, 100), make(chan *types.InodeOffsetReq, 100), done}
+	return &Worker{config, nil, make(map[string]pipelines.Pipeline), make(chan *types.EntryLine, 100), make(chan *types.InodeOffsetReq, 100), done}
 }
 
 func (w *Worker) Run() {
@@ -45,6 +49,12 @@ func (w *Worker) Run() {
 		db.AddQueryHook(dbLogger{})
 		defer db.Close()
 
+		err := w.setup(db)
+		if err != nil {
+			log.Error("Setup error: ", err)
+			goto eb
+		}
+
 		// Process any hot entries first
 		if w.hotEntry != nil {
 			err := w.processEntry(db, w.hotEntry)
@@ -54,7 +64,6 @@ func (w *Worker) Run() {
 			}
 			w.hotEntry = nil
 		}
-
 
 		// Listen for new entries
 		for {
@@ -112,8 +121,47 @@ func (w *Worker) Run() {
 end:
 }
 
+func (w *Worker) setup(db *pg.DB) error {
+	// Setup migrations table
+	err := db.Model(&pipelines.MigrationState{}).CreateTable(&orm.CreateTableOptions{IfNotExists: true})
+	if err != nil {
+		return err
+	}
+
+	// Setup entry line table
+	err = db.Model(&types.EntryLine{}).CreateTable(&orm.CreateTableOptions{IfNotExists: true})
+	if err != nil {
+		return err
+	}
+
+	// Setup inode offset table
+	err = db.Model(&types.InodeOffset{}).CreateTable(&orm.CreateTableOptions{IfNotExists: true})
+	if err != nil {
+		return err
+	}
+
+	// register pipelines
+	w.pipelines["probe"] = probe.NewPipeline()
+
+	for _, pipeline := range w.pipelines {
+		err := pipeline.Setup(db)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
 	_, err := db.Model(entry).OnConflict("DO NOTHING").Insert()
+
+	if pipeline, ok := w.pipelines[entry.Service]; ok {
+		err := pipeline.ProcessEntry(db, entry)
+		if err != nil {
+			return err
+		}
+	}
 
 	inodeOffset := &types.InodeOffset{
 		Service: entry.Service,
