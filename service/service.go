@@ -24,7 +24,7 @@ func beginTail(service string, host string, filepath string, offset uint64, data
 	})
 	for line := range t.Lines {
 		if line.Err != nil {
-			log.Info("Tailer stopped")
+			log.Info("Tailer stopped due to ", line.Err)
 			killSignal <- inode
 			return
 		}
@@ -37,37 +37,6 @@ func beginTail(service string, host string, filepath string, offset uint64, data
 		}
 	}
 }
-
-// func invokeTailer(service string, filepath string, datachan chan *types.EntryLine, inodeOffsetReqChan chan *types.InodeOffsetReq, log *lf.Entry) {
-// 	log = log.WithField("file", filepath)
-// 	fileinfo, _ := os.Stat(filepath)
-// 	stat, ok := fileinfo.Sys().(*syscall.Stat_t)
-// 	if !ok {
-// 		log.Info("Not a syscall.Stat_t")
-// 		return
-// 	}
-// 	inode := stat.Ino
-// 	for {
-// 		restartSignal := make(chan struct{}) // TODO: not used right now
-// 		respChan := make(chan *types.InodeOffset)
-// 		host := viper.GetString("host")
-// 		inodeOffsetReqChan <- &types.InodeOffsetReq{
-// 			Service: service,
-// 			Host:    host,
-// 			Inode:   inode,
-// 			Resp:    respChan,
-// 		}
-// 		log.Debug("Waiting for respChan ", inode)
-// 		offsetResponse := <-respChan
-// 		log.Debug("Respchan responded with offset", offsetResponse, " for inode ", inode)
-// 		go beginTail(service, host, filepath, offsetResponse.Offset, datachan, restartSignal, inode, log)
-
-// 		select {
-// 		case <-restartSignal:
-// 			continue
-// 		}
-// 	}
-// }
 
 func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan chan *types.InodeOffsetReq) {
 	log := lf.WithField("service", t.Service)

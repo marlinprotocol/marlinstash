@@ -21,7 +21,6 @@ clean:
 
 install:
 	cp $(BINDIR)/$(BINCLI) $(INSTALLLOC)
-	cp $(BINDIR)/$(MIGRATECLI) $(INSTALLLOCMIGRATE)
 
 uninstall:
 	rm $(INSTALLLOC)

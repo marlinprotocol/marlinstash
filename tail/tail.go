@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 
 	// "io"
 	"io/ioutil"
@@ -291,6 +292,26 @@ func (tail *Tail) tailFileSync() {
 			// 		return
 			// 	}
 			// }
+		} else if err == io.EOF {
+			if tail.Follow && line != "" {
+				// this has the potential to never return the last line if
+				// it's not followed by a newline; seems a fair trade here
+				err := tail.seekTo(SeekInfo{Offset: offset, Whence: 0})
+				if err != nil {
+					tail.Kill(err)
+					return
+				}
+			}
+			// When EOF is reached, wait for more data to become
+			// available. Wait strategy is based on the `tail.watcher`
+			// implementation (inotify or polling).
+			err := tail.waitForChanges()
+			if err != nil {
+				if err != ErrStop {
+					tail.Kill(err)
+				}
+				return
+			}
 		} else {
 			// Send a signal to caller asking a shutdown
 			tail.Lines <- &Line{Err: err}

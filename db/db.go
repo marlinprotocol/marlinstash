@@ -152,7 +152,7 @@ func (w *Worker) setup(db *pg.DB) error {
 
 	return nil
 }
-
+ 
 func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
 	_, err := db.Model(entry).OnConflict("DO NOTHING").Insert()
 

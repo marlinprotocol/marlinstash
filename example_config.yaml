@@ -1,17 +1,14 @@
 config_version: 1
 
-database_host: "host"
-database_port: "3242"
-database_dbname: "dbname"
-database_username: "username"
-database_password: "password"
+database_host: "127.0.0.1"
+database_port: "5432"
+database_dbname: "postgres"
+database_username: "marlin"
+database_password: "linmar"
 
-host: "tailerpc"
+host: "defaulttailer"
 
 services:
-  - service: "bootstrap"
-    logrootdir: "/var/log/supervisor"
-    fileregex: "bootstrap[0-9]+.log"
-  - service: "relay"
-    logrootdir: "/var/log/supervisor"
-    fileregex: "relay*.log"
+  - service: "probe"
+    logrootdir: "/tmp/tailtest"
+    fileregex: "nohup\\.out(\\.[0-9]+)?"

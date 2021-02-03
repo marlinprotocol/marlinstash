@@ -33,6 +33,27 @@ func RunLogger(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 
+	// HIJACK DB STUB CODE - REMOVE LATER
+	// h_entries := make(chan *types.EntryLine, 100)
+	// h_inodeoffsetreq := make(chan *types.InodeOffsetReq, 100)
+
+	// go func(h_e chan *types.EntryLine, h_i chan *types.InodeOffsetReq) {
+	// 	for {
+	// 		select {
+	// 		case x := <-h_e:
+	// 			log.Info("STUB ENTRY for message: ", x)
+	// 		case x := <-h_i:
+	// 			log.Info("STUB HIT for inode offset request", x)
+	// 			x.Resp <- &types.InodeOffset{x.Service, x.Host, x.Inode, 0}
+	// 		}
+	// 	}
+	// }(h_entries, h_inodeoffsetreq)
+
+	// for _, srv := range services {
+	// 	go service.Run(srv, h_entries, h_inodeoffsetreq)
+	// }
+
+	// HIJACKED CODE BELOW
 	for _, srv := range services {
 		go service.Run(srv, dbWorker.Entries, dbWorker.InodeOffsetReqs)
 	}
