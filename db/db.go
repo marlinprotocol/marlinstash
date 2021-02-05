@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"marlinstash/pipelines"
+	"marlinstash/pipelines/feeder"
 	"marlinstash/pipelines/probe"
 	"marlinstash/types"
 	"time"
@@ -142,6 +143,7 @@ func (w *Worker) setup(db *pg.DB) error {
 
 	// register pipelines
 	w.pipelines["probe"] = probe.NewPipeline()
+	w.pipelines["feeder"] = feeder.NewPipeline()
 
 	for _, pipeline := range w.pipelines {
 		err := pipeline.Setup(db)
@@ -152,7 +154,7 @@ func (w *Worker) setup(db *pg.DB) error {
 
 	return nil
 }
- 
+
 func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
 	_, err := db.Model(entry).OnConflict("DO NOTHING").Insert()
 
