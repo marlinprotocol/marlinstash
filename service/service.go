@@ -61,6 +61,11 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan, re
 					}
 					inode := stat.Ino
 					if isCurrentlyRunning, ok := invokedRoutines[inode]; !ok || !isCurrentlyRunning {
+						if !ok {
+							log.Info("Running inode tailer for the first time for inode: ", inode)
+						} else {
+							log.Info("Seems like inode tailer is reinvoked for same inode again: ", inode)
+						}
 						respChan := make(chan *types.InodeOffset)
 						inodeOffsetReqChan <- &types.InodeOffsetReq{
 							Service: t.Service,
@@ -68,9 +73,9 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan, re
 							Inode:   inode,
 							Resp:    respChan,
 						}
-						log.Debug("Waiting for respChan ", inode)
+						log.Info("Waiting for DB to return offset for ", inode)
 						offsetResponse := <-respChan
-						log.Debug("Respchan responded with offset", offsetResponse, " for inode ", inode)
+						log.Info("DB responded with offset", offsetResponse, " for inode ", inode)
 
 						// Mitigate inode reuse
 						fi, err := os.Stat(filepath)
@@ -80,7 +85,8 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan, re
 
 						// Check size
 						size := fi.Size()
-						if uint64(size) < offsetResponse.Offset / 10 {
+						if uint64(size) < offsetResponse.Offset/10 {
+							log.Info("Found large size difference between current file size and offset stored in DB for inode: ", inode)
 							respChan := make(chan *types.InodeOffset)
 							resetReqChan <- &types.InodeOffsetReq{
 								Service: t.Service,
@@ -88,7 +94,7 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan, re
 								Inode:   inode,
 								Resp:    respChan,
 							}
-							_, ok := <- respChan
+							_, ok := <-respChan
 							if !ok {
 								return errors.New("Reset failure")
 							}
@@ -108,6 +114,7 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan, re
 		for {
 			select {
 			case inodeTailerKilled := <-killSignal:
+				log.Info("Tailer has been killed for: ", inodeTailerKilled)
 				invokedRoutines[inodeTailerKilled] = false
 			case <-time.After(REFRESH * time.Second):
 				// REDO FILEWALK HERE

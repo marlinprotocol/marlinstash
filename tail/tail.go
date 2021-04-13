@@ -298,6 +298,8 @@ func (tail *Tail) tailFileSync() {
 				// it's not followed by a newline; seems a fair trade here
 				err := tail.seekTo(SeekInfo{Offset: offset, Whence: 0})
 				if err != nil {
+					// Send a signal to caller asking a shutdown
+					tail.Lines <- &Line{Err: err}
 					tail.Kill(err)
 					return
 				}
@@ -307,6 +309,8 @@ func (tail *Tail) tailFileSync() {
 			// implementation (inotify or polling).
 			err := tail.waitForChanges()
 			if err != nil {
+				// Send a signal to caller asking a shutdown
+				tail.Lines <- &Line{Err: err}
 				if err != ErrStop {
 					tail.Kill(err)
 				}
