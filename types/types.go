@@ -8,6 +8,14 @@ type EntryLine struct {
 	Message string
 }
 
+type ArchivedEntryLine struct {
+	Service string
+	Host    string
+	Inode   uint64
+	Offset  uint64
+	Message string
+}
+
 type InodeOffset struct {
 	Service string `pg:",unique:dedup"`
 	Host    string `pg:",unique:dedup"`
