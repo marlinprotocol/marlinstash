@@ -35,6 +35,18 @@ type MsgSend struct {
 	Cluster   string
 }
 
+type ArchivedMsgSend struct {
+	Host      string
+	Inode     uint64
+	Offset    uint64
+	Ts        time.Time
+	Level     string
+	Location  string
+	MessageId uint64
+	Cluster   string
+}
+
+
 func (p *Pipeline) Setup(db *pg.DB) error {
 	return pipelines.ApplyMigrations(db, "feeder", feederMigrations[:], uint64(len(feederMigrations)))
 }
@@ -76,3 +88,16 @@ func (p *Pipeline) ProcessEntry(db *pg.DB, entry *types.EntryLine) error {
 
 	return nil
 }
+
+func (p *Pipeline) Archive(tx *pg.Tx, service string, host string, inode uint64) error {
+	_, err := tx.Query(&ArchivedMsgSend{}, "INSERT INTO archived_msg_sends SELECT * FROM msg_sends WHERE host = ? AND inode = ?;", host, inode)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Query(&ArchivedMsgSend{}, "DELETE FROM msg_sends WHERE host = ? AND inode = ?;", host, inode)
+	return err
+}
+
+
+

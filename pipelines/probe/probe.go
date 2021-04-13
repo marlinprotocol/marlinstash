@@ -36,6 +36,18 @@ type MsgRecv struct {
 	Relay     string
 }
 
+type ArchivedMsgRecv struct {
+	Host      string
+	Inode     uint64
+	Offset    uint64
+	Ts        time.Time
+	Level     string
+	Location  string
+	MessageId uint64
+	Cluster   string
+	Relay     string
+}
+
 func (p *Pipeline) Setup(db *pg.DB) error {
 	return pipelines.ApplyMigrations(db, "probe", probeMigrations[:], uint64(len(probeMigrations)))
 }
@@ -78,3 +90,14 @@ func (p *Pipeline) ProcessEntry(db *pg.DB, entry *types.EntryLine) error {
 
 	return nil
 }
+
+func (p *Pipeline) Archive(tx *pg.Tx, service string, host string, inode uint64) error {
+	_, err := tx.Query(&ArchivedMsgRecv{}, "INSERT INTO archived_msg_recvs SELECT * FROM msg_recvs WHERE host = ? AND inode = ?;", host, inode)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Query(&ArchivedMsgRecv{}, "DELETE FROM msg_recvs WHERE host = ? AND inode = ?;", host, inode)
+	return err
+}
+
