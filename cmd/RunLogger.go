@@ -34,7 +34,7 @@ func RunLogger(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, srv := range services {
-		go service.Run(srv, dbWorker.Entries, dbWorker.InodeOffsetReqs)
+		go service.Run(srv, dbWorker.Entries, dbWorker.InodeOffsetReqs, dbWorker.ResetOffsetReqs)
 	}
 
 	infChan := make(chan struct{})

@@ -32,11 +32,20 @@ type Worker struct {
 
 	Entries         chan *types.EntryLine
 	InodeOffsetReqs chan *types.InodeOffsetReq
+	ResetOffsetReqs chan *types.InodeOffsetReq
 	Done            chan bool
 }
 
 func CreateWorker(config *pg.Options, done chan bool) *Worker {
-	return &Worker{config, nil, make(map[string]pipelines.Pipeline), make(chan *types.EntryLine, 100), make(chan *types.InodeOffsetReq, 100), done}
+	return &Worker{
+		config,
+		nil,
+		make(map[string]pipelines.Pipeline),
+		make(chan *types.EntryLine, 100),
+		make(chan *types.InodeOffsetReq, 100),
+		make(chan *types.InodeOffsetReq, 100),
+		done,
+	}
 }
 
 func (w *Worker) Run() {
@@ -105,6 +114,77 @@ func (w *Worker) Run() {
 					goto eb
 				}
 				req.Resp <- inodeOffset
+			case req, ok := <-w.ResetOffsetReqs:
+				if !ok {
+					log.Error("DB: Reset channel closed")
+					close(w.Done)
+					goto end
+				}
+				log.Info("Resetting: ", req.Service, req.Host, req.Inode)
+				inodeOffset := &types.InodeOffset{
+					Service: req.Service,
+					Host:    req.Host,
+					Inode:   req.Inode,
+					Offset:  0,
+				}
+
+				tx, err := db.Begin()
+				if err != nil {
+					close(req.Resp)
+					log.Error("Reset query error: ", err)
+					goto eb
+				}
+				defer tx.Close()
+
+				archivedEntryLine := &types.ArchivedEntryLine{
+					Service: req.Service,
+					Host:    req.Host,
+					Inode:   req.Inode,
+					Offset:  0,
+					Message: "",
+				}
+				_, err = tx.Query(archivedEntryLine, "INSERT INTO archived_entry_lines SELECT * FROM entry_lines WHERE service = ? AND host = ? AND inode = ?;", req.Service, req.Host, req.Inode)
+				if err != nil {
+					tx.Rollback()
+					close(req.Resp)
+					log.Error("Reset query error: ", err)
+					goto eb
+				}
+
+				_, err = tx.Query(archivedEntryLine, "DELETE FROM entry_lines WHERE service = ? AND host = ? AND inode = ?;", req.Service, req.Host, req.Inode)
+				if err != nil {
+					tx.Rollback()
+					close(req.Resp)
+					log.Error("Reset query error: ", err)
+					goto eb
+				}
+
+				for _, pipeline := range w.pipelines {
+					err := pipeline.Archive(tx, req.Service, req.Host, req.Inode)
+					if err != nil {
+						tx.Rollback()
+						close(req.Resp)
+						log.Error("Reset query error: ", err)
+						goto eb
+					}
+				}
+
+				_, err = db.Model(inodeOffset).OnConflict("(service, host, inode) DO UPDATE SET \"offset\" = 0").Insert()
+				if err != nil {
+					tx.Rollback()
+					close(req.Resp)
+					log.Error("Offset query error: ", err)
+					goto eb
+				}
+
+				err = tx.Commit()
+				if err != nil {
+					close(req.Resp)
+					log.Error("Reset query error: ", err)
+					goto eb
+				}
+
+				req.Resp <- inodeOffset
 			}
 		}
 
@@ -131,6 +211,11 @@ func (w *Worker) setup(db *pg.DB) error {
 
 	// Setup entry line table
 	err = db.Model(&types.EntryLine{}).CreateTable(&orm.CreateTableOptions{IfNotExists: true})
+	if err != nil {
+		return err
+	}
+
+	err = db.Model(&types.ArchivedEntryLine{}).CreateTable(&orm.CreateTableOptions{IfNotExists: true})
 	if err != nil {
 		return err
 	}

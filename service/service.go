@@ -38,7 +38,7 @@ func beginTail(service string, host string, filepath string, offset uint64, data
 	}
 }
 
-func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan chan *types.InodeOffsetReq) {
+func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan, resetReqChan chan *types.InodeOffsetReq) {
 	log := lf.WithField("service", t.Service)
 	log.WithField("regex", t.FileRegex).WithField("refresh", REFRESH*time.Second).Info("Service started")
 
@@ -71,6 +71,30 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan cha
 						log.Debug("Waiting for respChan ", inode)
 						offsetResponse := <-respChan
 						log.Debug("Respchan responded with offset", offsetResponse, " for inode ", inode)
+
+						// Mitigate inode reuse
+						fi, err := os.Stat(filepath)
+						if err != nil {
+							return err
+						}
+
+						// Check size
+						size := fi.Size()
+						if uint64(size) < offsetResponse.Offset / 10 {
+							respChan := make(chan *types.InodeOffset)
+							resetReqChan <- &types.InodeOffsetReq{
+								Service: t.Service,
+								Host:    host,
+								Inode:   inode,
+								Resp:    respChan,
+							}
+							_, ok := <- respChan
+							if !ok {
+								return errors.New("Reset failure")
+							}
+							offsetResponse.Offset = 0
+						}
+
 						go beginTail(t.Service, host, filepath, offsetResponse.Offset, datachan, killSignal, inode, log.WithField("file", filepath))
 						// go invokeTailer(t.Service, t.LogRootDir+"/"+f.Name(), datachan, inodeOffsetReqChan, log)
 						invokedRoutines[inode] = true
