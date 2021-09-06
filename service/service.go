@@ -27,7 +27,7 @@ func beginTail(service string, host string, filepath string,
 		Location: &tail.SeekInfo{Offset: int64(offset)},
 		Follow:   true,
 	})
-	cwp := viper.GetInt("cycle_wait_period")
+	cwp := viper.GetInt("cycle_wait_periods")
 	inactive_time_sec := viper.GetInt("inactive_time_secs")
 
 	error_kill := struct {
