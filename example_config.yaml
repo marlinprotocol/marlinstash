@@ -8,7 +8,10 @@ database_password: "linmar"
 
 host: "defaulttailer"
 
+cycle_wait_period: 2
+inactive_time_secs: 10
+
 services:
-  - service: "probe"
+  - service: "testing"
     logrootdir: "/tmp/tailtest"
-    fileregex: "nohup\\.out(\\.[0-9]+)?"
+    fileregex: "example.log"
