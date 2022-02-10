@@ -27,6 +27,7 @@ var probeMigrations [2]*pipelines.Migration = [2]*pipelines.Migration{
 				MessageId uint64    `pg:",notnull"`
 				Cluster   string    `pg:",notnull"`
 				Relay     string    `pg:",notnull"`
+				Sender    string    `pg:",notnull"`
 			}
 			err := db.Model(&MsgRecv{}).CreateTable(nil)
 			return err
@@ -51,6 +52,7 @@ var probeMigrations [2]*pipelines.Migration = [2]*pipelines.Migration{
 				MessageId uint64
 				Cluster   string
 				Relay     string
+				Sender    string
 			}
 			err := db.Model(&ArchivedMsgRecv{}).CreateTable(nil)
 			return err

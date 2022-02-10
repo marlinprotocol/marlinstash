@@ -20,7 +20,7 @@ type Pipeline struct {
 func NewPipeline() *Pipeline {
 	return &Pipeline{
 		parsers.NewSpdlogParser(),
-		regexp.MustCompile("Msg log: ([0-9]+), cluster: (\\w+), relay: ([^\\s]+)"),
+		regexp.MustCompile("Msg log: ([0-9]+), cluster: (\\w+), relay: ([^\\s]+), sender: (\\w+)"),
 	}
 }
 
@@ -34,6 +34,7 @@ type MsgRecv struct {
 	MessageId uint64
 	Cluster   string
 	Relay     string
+	Sender    string
 }
 
 type ArchivedMsgRecv struct {
@@ -46,6 +47,7 @@ type ArchivedMsgRecv struct {
 	MessageId uint64
 	Cluster   string
 	Relay     string
+	Sender    string
 }
 
 func (p *Pipeline) Setup(db *pg.DB) error {
@@ -61,7 +63,7 @@ func (p *Pipeline) ProcessEntry(db *pg.DB, entry *types.EntryLine) error {
 	}
 
 	parts := p.msgRecvParser.FindStringSubmatch(msg)
-	if len(parts) == 4 {
+	if len(parts) == 5 {
 		parts = parts[1:]
 		msgid, err := strconv.ParseUint(parts[0], 10, 64)
 		if err != nil {
@@ -79,6 +81,7 @@ func (p *Pipeline) ProcessEntry(db *pg.DB, entry *types.EntryLine) error {
 			msgid,
 			parts[1],
 			parts[2],
+			parts[3],
 		}
 		_, err = db.Model(obj).
 			OnConflict("DO NOTHING").
