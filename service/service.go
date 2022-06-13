@@ -18,26 +18,13 @@ const REFRESH time.Duration = 30
 
 func beginTail(service string, host string, filepath string,
 	offset uint64, datachan chan *types.EntryLine,
-	killSignal chan struct {
-		uint64
-		int
-	}, inode uint64, log *lf.Entry) {
+	killSignal chan uint64, inode uint64, log *lf.Entry) {
 	log.WithField("offset", offset).Info("Tailer started")
 	t, _ := tail.TailFile(filepath, tail.Config{
 		Location: &tail.SeekInfo{Offset: int64(offset)},
 		Follow:   true,
 	})
-	cwp := viper.GetInt("cycle_wait_periods")
 	inactive_time_sec := viper.GetInt("inactive_time_secs")
-
-	error_kill := struct {
-		uint64
-		int
-	}{inode, 1}
-	inactive_kill := struct {
-		uint64
-		int
-	}{inode, cwp}
 
 	ticker := time.NewTicker(time.Second * time.Duration(inactive_time_sec))
 
@@ -47,7 +34,7 @@ func beginTail(service string, host string, filepath string,
 			if line.Err != nil {
 				log.Error("Tailer stopped due to ", line.Err)
 				t.Kill(errors.New("random error found"))
-				killSignal <- error_kill
+				killSignal <- inode
 				return
 			}
 			datachan <- &types.EntryLine{
@@ -60,7 +47,7 @@ func beginTail(service string, host string, filepath string,
 			ticker.Reset(time.Second * time.Duration(inactive_time_sec))
 		case <-ticker.C:
 			log.Warn("Tailer stopped due to inactivity")
-			killSignal <- inactive_kill
+			killSignal <- inode
 			t.Kill(errors.New("file too old"))
 			return
 		}
@@ -71,15 +58,10 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan cha
 	log := lf.WithField("service", t.Service)
 	log.WithField("regex", t.FileRegex).WithField("refresh", REFRESH*time.Second).Info("Service started")
 
-	// mapping from inode -> cycle wait period
-	// when actively tailing an inode, cycle wait period: 0
-	// when not actively tailing an inode, cycle wait period > 0, reduced 1 every iteration
-	// if cycle wait period == 1, make it 0 (actively tailing) and start the tailer
-	invokedRoutines := make(map[uint64]int)
-	killSignal := make(chan struct {
-		uint64
-		int
-	})
+	// mapping from inode -> is_running
+	// when actively tailing an inode, cycle wait period: is_running is true
+	invokedRoutines := make(map[uint64]bool)
+	killSignal := make(chan uint64)
 
 	for {
 		log.Info("Checking for new files to tail")
@@ -95,27 +77,17 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan cha
 						return errors.New("Not a syscall.Stat_t")
 					}
 					inode := stat.Ino
-					if cycleWaitPeriod, ok := invokedRoutines[inode]; !ok || cycleWaitPeriod != 0 {
-						if !ok {
-							log.Info("Running inode tailer for the first time for inode: ", inode)
-							err = tryTailing(t, inode, filepath, inodeOffsetReqChan,
-								resetReqChan, log, datachan, killSignal)
-							if err == nil {
-								invokedRoutines[inode] = 0
-							}
+					is_running, ok := invokedRoutines[inode]
 
-						} else {
-							if cycleWaitPeriod == 1 {
-								log.Info("Recycling on previously inactive file: ", inode)
-								err = tryTailing(t, inode, filepath, inodeOffsetReqChan,
-									resetReqChan, log, datachan, killSignal)
-								if err == nil {
-									invokedRoutines[inode] = 0
-								}
-							} else {
-								invokedRoutines[inode] = cycleWaitPeriod - 1
-							}
+					if !ok || !is_running {
+						log.Info("Running inode tailer for: ", inode)
+						err = tryTailing(t, inode, filepath, inodeOffsetReqChan,
+							resetReqChan, log, datachan, killSignal)
+						if err != nil {
+							log.Fatalf(err.Error())
 						}
+						invokedRoutines[inode] = true // Mark as running
+
 					}
 				}
 			}
@@ -126,8 +98,8 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan cha
 		for {
 			select {
 			case inodeTailerKilled := <-killSignal:
-				log.Info("Tailer has been killed for {indde, cycle_wait_period}: ", inodeTailerKilled)
-				invokedRoutines[inodeTailerKilled.uint64] = inodeTailerKilled.int
+				log.Info("Tailer has been killed for: ", inodeTailerKilled)
+				invokedRoutines[inodeTailerKilled] = false
 			case <-time.After(REFRESH * time.Second):
 				// REDO FILEWALK HERE
 				break WAIT
@@ -139,10 +111,7 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan cha
 func tryTailing(t types.Service, inode uint64, filepath string,
 	inodeOffsetReqChan chan *types.InodeOffsetReq,
 	resetReqChan chan *types.InodeOffsetReq,
-	log *lf.Entry, datachan chan *types.EntryLine, killSignal chan struct {
-		uint64
-		int
-	}) error {
+	log *lf.Entry, datachan chan *types.EntryLine, killSignal chan uint64) error {
 	host := viper.GetString("host")
 	respChan := make(chan *types.InodeOffset)
 	inodeOffsetReqChan <- &types.InodeOffsetReq{
@@ -180,6 +149,5 @@ func tryTailing(t types.Service, inode uint64, filepath string,
 	}
 
 	go beginTail(t.Service, host, filepath, offsetResponse.Offset, datachan, killSignal, inode, log.WithField("file", filepath))
-	// go beginTail(t.Service, host, filepath, 0, datachan, killSignal, inode, log.WithField("file", filepath))
 	return nil
 }
