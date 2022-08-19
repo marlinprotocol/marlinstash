@@ -32,8 +32,8 @@ func beginTail(service string, host string, filepath string,
 		select {
 		case line := <-t.Lines:
 			if line.Err != nil {
+				t.Stop()
 				log.Error("Tailer stopped due to ", line.Err)
-				t.Kill(errors.New("random error found"))
 				killSignal <- inode
 				return
 			}
