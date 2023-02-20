@@ -47,9 +47,7 @@ func beginTail(service string, host string, filepath string,
 			ticker.Reset(time.Second * time.Duration(inactive_time_sec))
 		case <-ticker.C:
 			log.Warn("Tailer stopped due to inactivity")
-			killSignal <- inode
-			t.Kill(errors.New("file too old"))
-			return
+			t.Kill(errors.New("inactivity"))
 		}
 	}
 }
@@ -99,7 +97,7 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan cha
 			select {
 			case inodeTailerKilled := <-killSignal:
 				log.Info("Tailer has been killed for: ", inodeTailerKilled)
-				invokedRoutines[inodeTailerKilled] = false
+				delete(invokedRoutines, inodeTailerKilled)
 			case <-time.After(REFRESH * time.Second):
 				// REDO FILEWALK HERE
 				break WAIT
