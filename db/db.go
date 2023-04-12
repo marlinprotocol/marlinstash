@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"marlinstash/pipelines"
+	"marlinstash/pipelines/crawler"
 	"marlinstash/pipelines/feeder"
 	"marlinstash/pipelines/probe"
+	"marlinstash/pipelines/spamcheck"
 	"marlinstash/types"
 	"sync"
 	"time"
@@ -246,6 +248,8 @@ func (w *Worker) setup(db *pg.DB) error {
 	// register pipelines
 	w.pipelines["probe"] = probe.NewPipeline()
 	w.pipelines["feeder"] = feeder.NewPipeline()
+	w.pipelines["crawler"] = crawler.NewPipeline()
+	w.pipelines["spamcheck"] = spamcheck.NewPipeline()
 
 	for _, pipeline := range w.pipelines {
 		err := pipeline.Setup(db)
@@ -258,7 +262,7 @@ func (w *Worker) setup(db *pg.DB) error {
 }
 
 func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
-	_, err := db.Model(entry).OnConflict("DO NOTHING").Insert()
+	// _, err := db.Model(entry).OnConflict("DO NOTHING").Insert()
 
 	if pipeline, ok := w.pipelines[entry.Service]; ok {
 		err := pipeline.ProcessEntry(db, entry)
@@ -273,7 +277,7 @@ func (w *Worker) processEntry(db *pg.DB, entry *types.EntryLine) error {
 		Inode:   entry.Inode,
 		Offset:  entry.Offset,
 	}
-	_, err = db.Model(inodeOffset).OnConflict("(service, host, inode) DO UPDATE SET \"offset\" = greatest(inode_offset.offset, EXCLUDED.offset)").Insert()
+	_, err := db.Model(inodeOffset).OnConflict("(service, host, inode) DO UPDATE SET \"offset\" = greatest(inode_offset.offset, EXCLUDED.offset)").Insert()
 
 	return err
 }
