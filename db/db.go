@@ -161,13 +161,14 @@ func (w *Worker) Run() {
 					Offset:  0,
 					Message: "",
 				}
-				_, err = tx.Query(archivedEntryLine, "INSERT INTO archived_entry_lines SELECT * FROM entry_lines WHERE service = ? AND host = ? AND inode = ?;", req.Service, req.Host, req.Inode)
-				if err != nil {
-					tx.Rollback()
-					close(req.Resp)
-					log.Error("Reset query error: ", err)
-					goto eb
-				}
+				// Note: Removed archiving to manage disk space better
+				// _, err = tx.Query(archivedEntryLine, "INSERT INTO archived_entry_lines SELECT * FROM entry_lines WHERE service = ? AND host = ? AND inode = ?;", req.Service, req.Host, req.Inode)
+				// if err != nil {
+				// 	tx.Rollback()
+				// 	close(req.Resp)
+				// 	log.Error("Reset query error: ", err)
+				// 	goto eb
+				// }
 
 				_, err = tx.Query(archivedEntryLine, "DELETE FROM entry_lines WHERE service = ? AND host = ? AND inode = ?;", req.Service, req.Host, req.Inode)
 				if err != nil {

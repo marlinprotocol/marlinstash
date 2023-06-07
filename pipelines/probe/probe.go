@@ -92,12 +92,12 @@ func (p *Pipeline) ProcessEntry(db *pg.DB, entry *types.EntryLine) error {
 }
 
 func (p *Pipeline) Archive(tx *pg.Tx, service string, host string, inode uint64) error {
-	_, err := tx.Query(&ArchivedMsgRecv{}, "INSERT INTO archived_msg_recvs SELECT * FROM msg_recvs WHERE host = ? AND inode = ?;", host, inode)
-	if err != nil {
-		return err
-	}
+	// NOTE: Removed archiving to manage disk space better
+	// _, err := tx.Query(&ArchivedMsgRecv{}, "INSERT INTO archived_msg_recvs SELECT * FROM msg_recvs WHERE host = ? AND inode = ?;", host, inode)
+	// if err != nil {
+	// 	return err
+	// }
 
-	_, err = tx.Query(&ArchivedMsgRecv{}, "DELETE FROM msg_recvs WHERE host = ? AND inode = ?;", host, inode)
+	_, err := tx.Query(&ArchivedMsgRecv{}, "DELETE FROM msg_recvs WHERE host = ? AND inode = ?;", host, inode)
 	return err
 }
-
