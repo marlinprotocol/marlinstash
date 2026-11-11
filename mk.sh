@@ -10,6 +10,6 @@ make release
 echo -e "${COLOR}COPYING marlinstash & marlinstash_migrate to /usr/local/bin/ ${ENDCOLOR}"
 make install
 
-echo -e "${COLOR}COPYING configs to /etc/marlinstash/config.yaml ${ENDCOLOR}"
+echo -e "${COLOR}COPYING configs to /etc/marlinstash/config.yml ${ENDCOLOR}"
 mkdir -p /etc/marlinstash
-cp example_config.yaml /etc/marlinstash/config.yaml
+cp example_config.yml /etc/marlinstash/config.yml
