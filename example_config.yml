@@ -10,5 +10,8 @@ host: "defaulttailer"
 
 services:
   - service: "probe"
-    logrootdir: "/tmp/tailtest"
+    # Directory in which the probe writes its log file. Set this before starting,
+    # marlinstash reads nothing for the service till the directory exists.
+    logrootdir: "/path/to/probe/logs"
+    # Regex for names of log files in logrootdir (and directories in it)
     fileregex: "nohup\\.out(\\.[0-9]+)?"
