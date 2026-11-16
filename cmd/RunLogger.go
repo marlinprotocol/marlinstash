@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"marlinstash/db"
 	"marlinstash/service"
 	"marlinstash/types"
@@ -12,14 +13,23 @@ import (
 	"github.com/spf13/viper"
 )
 
+const minRetentionDays = 3
+
 func RunLogger(cmd *cobra.Command, args []string) error {
+	// retention is off unless retention_days is set, values below the minimum are refused
+	// as receiverTicketingClient reads up to the last day and a half of msg_recvs
+	retentionDays := viper.GetInt("retention_days")
+	if retentionDays != 0 && retentionDays < minRetentionDays {
+		return fmt.Errorf("retention_days is %d, it has to be 0 (keep everything) or at least %d", retentionDays, minRetentionDays)
+	}
+
 	done := make(chan bool)
 	dbWorker := db.CreateWorker(&pg.Options{
 		Addr:     viper.GetString("database_host") + ":" + viper.GetString("database_port"),
 		Database: viper.GetString("database_dbname"),
 		User:     viper.GetString("database_username"),
 		Password: viper.GetString("database_password"),
-	}, done)
+	}, retentionDays, done)
 	go dbWorker.Run()
 
 	// TODO: Use done, closed when db routine is ending

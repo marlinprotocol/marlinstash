@@ -99,5 +99,14 @@ func (p *Pipeline) Archive(tx *pg.Tx, service string, host string, inode uint64)
 	return err
 }
 
-
-
+func (p *Pipeline) Prune(db *pg.DB, olderThan time.Time) (int, error) {
+	deleted := 0
+	for _, table := range []string{"msg_sends", "archived_msg_sends"} {
+		res, err := db.Exec("DELETE FROM "+table+" WHERE ts < ?", olderThan)
+		if err != nil {
+			return deleted, err
+		}
+		deleted += res.RowsAffected()
+	}
+	return deleted, nil
+}

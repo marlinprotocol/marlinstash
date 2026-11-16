@@ -32,17 +32,21 @@ type Worker struct {
 	hotEntry  *types.EntryLine
 	pipelines map[string]pipelines.Pipeline
 
+	// rows older than this many days are deleted, 0 disables retention
+	retentionDays int
+
 	Entries         chan *types.EntryLine
 	InodeOffsetReqs chan *types.InodeOffsetReq
 	ResetOffsetReqs chan *types.InodeOffsetReq
 	Done            chan bool
 }
 
-func CreateWorker(config *pg.Options, done chan bool) *Worker {
+func CreateWorker(config *pg.Options, retentionDays int, done chan bool) *Worker {
 	return &Worker{
 		config,
 		nil,
 		make(map[string]pipelines.Pipeline),
+		retentionDays,
 		make(chan *types.EntryLine, 100),
 		make(chan *types.InodeOffsetReq, 100),
 		make(chan *types.InodeOffsetReq, 100),
@@ -60,6 +64,13 @@ func (w *Worker) Run() {
 	go tp.presentThroughput(5)
 
 	timerWait := time.Second
+
+	// nil channel is never ready, so retention never runs unless it is enabled
+	var retentionTimer <-chan time.Time
+	if w.retentionDays > 0 {
+		log.Info("Retention enabled, rows older than ", w.retentionDays, " days are deleted")
+		retentionTimer = time.After(retentionFirstRun)
+	}
 
 	for {
 		log.Info("Connecting to DB...")
@@ -105,6 +116,16 @@ func (w *Worker) Run() {
 				}
 				tp.putInfo(w.hotEntry.Service+"_DBHotE+", 1)
 				w.hotEntry = nil
+			case <-retentionTimer:
+				// run on the worker so that it does not overlap with inserts and archival
+				err := w.applyRetention(db, time.Now())
+				retentionTimer = time.After(retentionInterval)
+				if err != nil {
+					log.Error("Retention error: ", err)
+					tp.putInfo("DBRetention-", 1)
+					goto eb
+				}
+				tp.putInfo("DBRetention+", 1)
 			case req, ok := <-w.InodeOffsetReqs:
 				if !ok {
 					log.Error("DB: Reqs channel closed")
@@ -241,6 +262,13 @@ func (w *Worker) setup(db *pg.DB) error {
 	err = db.Model(&types.InodeOffset{}).CreateTable(&orm.CreateTableOptions{IfNotExists: true})
 	if err != nil {
 		return err
+	}
+
+	if w.retentionDays > 0 {
+		err = setupRetention(db)
+		if err != nil {
+			return err
+		}
 	}
 
 	// register pipelines

@@ -13,7 +13,7 @@ import (
 // potentially corrupt it beyond recovery
 // Adding elements is relatively safer (key word _relatively_)
 // Can still blow up the db if you don't know what you're doing
-var feederMigrations [2]*pipelines.Migration = [2]*pipelines.Migration{
+var feederMigrations [3]*pipelines.Migration = [3]*pipelines.Migration{
 	// 1 - Create MsgSend table
 	{
 		Forward: func(db *pg.Tx) error {
@@ -55,6 +55,18 @@ var feederMigrations [2]*pipelines.Migration = [2]*pipelines.Migration{
 		Backward: func(db *pg.Tx) error {
 			type ArchivedMsgSend struct{}
 			err := db.Model(&ArchivedMsgSend{}).DropTable(nil)
+			return err
+		},
+	},
+
+	// 3 - Index msg_sends on ts, used by queries on a time range and by retention
+	{
+		Forward: func(db *pg.Tx) error {
+			_, err := db.Exec("CREATE INDEX IF NOT EXISTS msg_sends_ts_idx ON msg_sends (ts)")
+			return err
+		},
+		Backward: func(db *pg.Tx) error {
+			_, err := db.Exec("DROP INDEX IF EXISTS msg_sends_ts_idx")
 			return err
 		},
 	},

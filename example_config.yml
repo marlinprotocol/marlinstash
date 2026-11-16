@@ -8,6 +8,10 @@ database_password: "linmar"
 
 host: "defaulttailer"
 
+# Delete rows older than this many days. Not set or 0 keeps everything, which is
+# the default. Has to be at least 3. See Retention in README.md before enabling.
+# retention_days: 14
+
 services:
   - service: "probe"
     # Directory in which the probe writes its log file. Set this before starting,
