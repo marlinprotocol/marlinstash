@@ -10,6 +10,11 @@ make release
 echo -e "${COLOR}COPYING marlinstash & marlinstash_migrate to /usr/local/bin/ ${ENDCOLOR}"
 make install
 
-echo -e "${COLOR}COPYING configs to /etc/marlinstash/config.yaml ${ENDCOLOR}"
 mkdir -p /etc/marlinstash
-cp example_config.yaml /etc/marlinstash/config.yaml
+if [ -f /etc/marlinstash/config.yml ]; then
+	echo -e "${COLOR}KEEPING existing config at /etc/marlinstash/config.yml ${ENDCOLOR}"
+else
+	echo -e "${COLOR}COPYING configs to /etc/marlinstash/config.yml ${ENDCOLOR}"
+	cp example_config.yml /etc/marlinstash/config.yml
+	echo -e "${COLOR}EDIT /etc/marlinstash/config.yml before starting: database_* and logrootdir of the probe service ${ENDCOLOR}"
+fi

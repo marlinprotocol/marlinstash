@@ -1,0 +1,26 @@
+config_version: 1
+
+database_host: "127.0.0.1"
+database_port: "5432"
+database_dbname: "postgres"
+database_username: "marlin"
+database_password: "linmar"
+
+host: "defaulttailer"
+
+# Timezone of the time in the log files. Not set means the timezone of this
+# machine, which is right when the program that writes the logs runs on it with
+# the same timezone. Set it (for example "UTC") if that program runs in another one.
+# log_timezone: "UTC"
+
+# Delete rows older than this many days. Not set or 0 keeps everything, which is
+# the default. Has to be at least 3. See Retention in README.md before enabling.
+# retention_days: 14
+
+services:
+  - service: "probe"
+    # Directory in which the probe writes its log file. Set this before starting,
+    # marlinstash reads nothing for the service till the directory exists.
+    logrootdir: "/path/to/probe/logs"
+    # Regex for names of log files in logrootdir (and directories in it)
+    fileregex: "nohup\\.out(\\.[0-9]+)?"

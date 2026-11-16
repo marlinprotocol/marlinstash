@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"marlinstash/tail"
 	"marlinstash/types"
 	"os"
@@ -18,10 +19,15 @@ const REFRESH time.Duration = 30
 
 func beginTail(service string, host string, filepath string, offset uint64, datachan chan *types.EntryLine, killSignal chan uint64, inode uint64, log *lf.Entry) {
 	log.WithField("offset", offset).Info("Tailer started")
-	t, _ := tail.TailFile(filepath, tail.Config{
+	t, err := tail.TailFile(filepath, tail.Config{
 		Location: &tail.SeekInfo{Offset: int64(offset)},
 		Follow:   true,
 	})
+	if err != nil {
+		log.Error("Tailer could not be started: ", err)
+		killSignal <- inode
+		return
+	}
 	for line := range t.Lines {
 		if line.Err != nil {
 			log.Info("Tailer stopped due to ", line.Err)
@@ -36,6 +42,61 @@ func beginTail(service string, host string, filepath string, offset uint64, data
 			Message: line.Text,
 		}
 	}
+	// Lines is closed without an error line when the file is removed
+	log.Info("Tailer stopped")
+	killSignal <- inode
+}
+
+type logFile struct {
+	path  string
+	inode uint64
+}
+
+// findLogFiles returns the files under root whose name matches fileRegex.
+// A missing or unreadable root is returned as an error. Files that can't be
+// read or are removed while the directory is walked are skipped.
+func findLogFiles(root string, fileRegex string, log *lf.Entry) ([]logFile, error) {
+	re, err := regexp.Compile(fileRegex)
+	if err != nil {
+		return nil, fmt.Errorf("fileregex %q is not valid: %v", fileRegex, err)
+	}
+
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		return nil, fmt.Errorf("logrootdir %q can't be read: %v", root, err)
+	}
+	if !rootInfo.IsDir() {
+		return nil, fmt.Errorf("logrootdir %q is not a directory", root)
+	}
+
+	files := []logFile{}
+	_ = filepath.Walk(root, func(path string, f os.FileInfo, err error) error {
+		if err != nil || f == nil {
+			// f is nil when lstat fails, for example a file removed during the walk
+			log.Info("Skipping ", path, ": ", err)
+			return nil
+		}
+		if f.IsDir() || !re.MatchString(f.Name()) {
+			return nil
+		}
+		// stat again to follow symlinks, tailer opens the file the link points to
+		fileinfo, err := os.Stat(path)
+		if err != nil {
+			log.Info("Skipping ", path, ": ", err)
+			return nil
+		}
+		if fileinfo.IsDir() {
+			return nil
+		}
+		stat, ok := fileinfo.Sys().(*syscall.Stat_t)
+		if !ok {
+			log.Info("Skipping ", path, ": Not a syscall.Stat_t")
+			return nil
+		}
+		files = append(files, logFile{path, stat.Ino})
+		return nil
+	})
+	return files, nil
 }
 
 func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan, resetReqChan chan *types.InodeOffsetReq) {
@@ -48,67 +109,16 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan, re
 
 	for {
 		log.Info("Checking for new files to tail")
-		_ = filepath.Walk(t.LogRootDir, func(path string, f os.FileInfo, _ error) error {
-			if !f.IsDir() {
-				r, err := regexp.MatchString(t.FileRegex, f.Name())
-				if err == nil && r {
-					filepath := t.LogRootDir + "/" + f.Name()
-					fileinfo, _ := os.Stat(filepath)
-					stat, ok := fileinfo.Sys().(*syscall.Stat_t)
-					if !ok {
-						log.Info("Not a syscall.Stat_t")
-						return errors.New("Not a syscall.Stat_t")
-					}
-					inode := stat.Ino
-					if isCurrentlyRunning, ok := invokedRoutines[inode]; !ok || !isCurrentlyRunning {
-						if !ok {
-							log.Info("Running inode tailer for the first time for inode: ", inode)
-						} else {
-							log.Info("Seems like inode tailer is reinvoked for same inode again: ", inode)
-						}
-						respChan := make(chan *types.InodeOffset)
-						inodeOffsetReqChan <- &types.InodeOffsetReq{
-							Service: t.Service,
-							Host:    host,
-							Inode:   inode,
-							Resp:    respChan,
-						}
-						log.Info("Waiting for DB to return offset for ", inode)
-						offsetResponse := <-respChan
-						log.Info("DB responded with offset", offsetResponse, " for inode ", inode)
-
-						// Mitigate inode reuse
-						fi, err := os.Stat(filepath)
-						if err != nil {
-							return err
-						}
-
-						// Check size
-						size := fi.Size()
-						if uint64(size) < offsetResponse.Offset/10 {
-							log.Info("Found large size difference between current file size and offset stored in DB for inode: ", inode)
-							respChan := make(chan *types.InodeOffset)
-							resetReqChan <- &types.InodeOffsetReq{
-								Service: t.Service,
-								Host:    host,
-								Inode:   inode,
-								Resp:    respChan,
-							}
-							_, ok := <-respChan
-							if !ok {
-								return errors.New("Reset failure")
-							}
-							offsetResponse.Offset = 0
-						}
-
-						go beginTail(t.Service, host, filepath, offsetResponse.Offset, datachan, killSignal, inode, log.WithField("file", filepath))
-						// go invokeTailer(t.Service, t.LogRootDir+"/"+f.Name(), datachan, inodeOffsetReqChan, log)
-						invokedRoutines[inode] = true
-					}
-				}
+		files, err := findLogFiles(t.LogRootDir, t.FileRegex, log)
+		if err != nil {
+			log.Error("No files are read for this service, check logrootdir and fileregex in the config file: ", err)
+		}
+		for _, file := range files {
+			err := startTailer(t, host, file, invokedRoutines, datachan, inodeOffsetReqChan, resetReqChan, killSignal, log)
+			if err != nil {
+				log.Error("Could not start tailer for ", file.path, ": ", err)
 			}
-			return nil
-		})
+		}
 
 	WAIT:
 		for {
@@ -122,4 +132,59 @@ func Run(t types.Service, datachan chan *types.EntryLine, inodeOffsetReqChan, re
 			}
 		}
 	}
+}
+
+func startTailer(t types.Service, host string, file logFile, invokedRoutines map[uint64]bool, datachan chan *types.EntryLine, inodeOffsetReqChan, resetReqChan chan *types.InodeOffsetReq, killSignal chan uint64, log *lf.Entry) error {
+	inode := file.inode
+	isCurrentlyRunning, ok := invokedRoutines[inode]
+	if ok && isCurrentlyRunning {
+		return nil
+	}
+	if !ok {
+		log.Info("Running inode tailer for the first time for inode: ", inode)
+	} else {
+		log.Info("Seems like inode tailer is reinvoked for same inode again: ", inode)
+	}
+	respChan := make(chan *types.InodeOffset)
+	inodeOffsetReqChan <- &types.InodeOffsetReq{
+		Service: t.Service,
+		Host:    host,
+		Inode:   inode,
+		Resp:    respChan,
+	}
+	log.Info("Waiting for DB to return offset for ", inode)
+	offsetResponse, ok := <-respChan
+	if !ok {
+		// DB worker closes the channel when the query fails
+		return errors.New("Offset query failure")
+	}
+	log.Info("DB responded with offset", offsetResponse, " for inode ", inode)
+
+	// Mitigate inode reuse
+	fi, err := os.Stat(file.path)
+	if err != nil {
+		return err
+	}
+
+	// Check size
+	size := fi.Size()
+	if uint64(size) < offsetResponse.Offset/10 {
+		log.Info("Found large size difference between current file size and offset stored in DB for inode: ", inode)
+		respChan := make(chan *types.InodeOffset)
+		resetReqChan <- &types.InodeOffsetReq{
+			Service: t.Service,
+			Host:    host,
+			Inode:   inode,
+			Resp:    respChan,
+		}
+		_, ok := <-respChan
+		if !ok {
+			return errors.New("Reset failure")
+		}
+		offsetResponse.Offset = 0
+	}
+
+	go beginTail(t.Service, host, file.path, offsetResponse.Offset, datachan, killSignal, inode, log.WithField("file", file.path))
+	invokedRoutines[inode] = true
+	return nil
 }
