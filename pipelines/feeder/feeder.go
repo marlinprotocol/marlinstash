@@ -17,9 +17,9 @@ type Pipeline struct {
 	msgSendParser *regexp.Regexp
 }
 
-func NewPipeline() *Pipeline {
+func NewPipeline(logLocation *time.Location) *Pipeline {
 	return &Pipeline{
-		parsers.NewSpdlogParser(),
+		parsers.NewSpdlogParser(logLocation),
 		regexp.MustCompile("Sending message ([0-9]+) to (\\w+)"),
 	}
 }

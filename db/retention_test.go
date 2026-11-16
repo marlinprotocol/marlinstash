@@ -81,7 +81,7 @@ func TestTsIndexMigration(t *testing.T) {
 	db := pg.Connect(opt)
 	defer db.Close()
 
-	w := CreateWorker(opt, 0, make(chan bool))
+	w := CreateWorker(opt, 0, time.Local, make(chan bool))
 	if err := w.setup(db); err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestRetention(t *testing.T) {
 	defer db.Close()
 
 	// database that was in use before retention was enabled
-	w := CreateWorker(opt, 0, make(chan bool))
+	w := CreateWorker(opt, 0, time.Local, make(chan bool))
 	if err := w.setup(db); err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestRetention(t *testing.T) {
 	insert(1, 3, now.Add(-13*day))
 	insert(1, 4, now.Add(-time.Hour))
 
-	w = CreateWorker(opt, 14, make(chan bool))
+	w = CreateWorker(opt, 14, time.Local, make(chan bool))
 	if err := w.setup(db); err != nil {
 		t.Fatal(err)
 	}

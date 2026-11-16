@@ -14,12 +14,22 @@ marlinstash reads `/etc/marlinstash/config.yml` by default, or the file given wi
 
 - `database_*`: the Postgres database to write to. marlinstash creates its tables when it starts.
 - `host`: name of this machine, stored with every record.
+- `log_timezone`: optional, timezone of the time in the log files. See [Time in log lines](#time-in-log-lines).
 - `retention_days`: optional, delete rows older than this many days. Off by default, see [Retention](#retention).
 - `services`: log files to read. Each entry sets the directory (`logrootdir`) and a regex for the file names (`fileregex`). Files are checked for every 30 seconds.
 
 `logrootdir` in the example is a placeholder. Set it to the directory in which the probe writes its log (the directory `eth_probe` is started from when run with `nohup`). If the directory does not exist, marlinstash keeps running and logs `No files are read for this service` every 30 seconds till it does.
 
 The `probe` service stores every `Msg log` line of `eth_probe` in the `msg_recvs` table, which is read by [receiverTicketingClient](https://github.com/marlinprotocol/receiverTicketingClient).
+
+## Time in log lines
+The probe writes the time in its log lines without a timezone, in the local time of the machine it runs on. marlinstash reads that time in the timezone of the machine it runs on itself, so the two have to agree. This is the case when both run on the same machine with the same `TZ`.
+
+If the probe runs with another timezone (for example in a container that is on UTC while the host is not), set `log_timezone` to the timezone of the probe, as a name from the tz database like `"UTC"` or `"Asia/Kolkata"`.
+
+Earlier versions always read the time as UTC. On a machine that is not on UTC that made `ts` in `msg_recvs` wrong by the UTC offset, and receiverTicketingClient counted the messages against the wrong epochs. After the upgrade new rows get the right time, rows stored before it keep the old one. Set `log_timezone: "UTC"` to keep the old behaviour.
+
+Running the probe machine on UTC is still the simplest setup: with local time, the hour that repeats when daylight saving time ends can't be told apart.
 
 ## Retention
 By default marlinstash never deletes anything. Every log line is stored in `entry_lines`, and every `Msg log` line again in `msg_recvs`, so the database keeps growing till the disk is full.

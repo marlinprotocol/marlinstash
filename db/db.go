@@ -34,6 +34,8 @@ type Worker struct {
 
 	// rows older than this many days are deleted, 0 disables retention
 	retentionDays int
+	// timezone in which the time in log lines is read
+	logLocation *time.Location
 
 	Entries         chan *types.EntryLine
 	InodeOffsetReqs chan *types.InodeOffsetReq
@@ -41,12 +43,13 @@ type Worker struct {
 	Done            chan bool
 }
 
-func CreateWorker(config *pg.Options, retentionDays int, done chan bool) *Worker {
+func CreateWorker(config *pg.Options, retentionDays int, logLocation *time.Location, done chan bool) *Worker {
 	return &Worker{
 		config,
 		nil,
 		make(map[string]pipelines.Pipeline),
 		retentionDays,
+		logLocation,
 		make(chan *types.EntryLine, 100),
 		make(chan *types.InodeOffsetReq, 100),
 		make(chan *types.InodeOffsetReq, 100),
@@ -272,8 +275,8 @@ func (w *Worker) setup(db *pg.DB) error {
 	}
 
 	// register pipelines
-	w.pipelines["probe"] = probe.NewPipeline()
-	w.pipelines["feeder"] = feeder.NewPipeline()
+	w.pipelines["probe"] = probe.NewPipeline(w.logLocation)
+	w.pipelines["feeder"] = feeder.NewPipeline(w.logLocation)
 
 	for _, pipeline := range w.pipelines {
 		err := pipeline.Setup(db)
